@@ -1,0 +1,16 @@
+# dependencies
+node_modules
+
+# next.js build output
+.next
+dist
+
+# environment variables
+.env
+.env.local
+
+# temp folders (your scanner)
+.temp-repos
+
+# misc
+.DS_Store
