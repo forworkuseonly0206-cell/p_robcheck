@@ -9,8 +9,8 @@ dist
 .env
 .env.local
 
-# temp folders (your scanner)
+# temp folders
 .temp-repos
 
-# misc
-.DS_Store
+# secrets / test keys
+test-api-key.js
