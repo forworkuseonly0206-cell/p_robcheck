@@ -28,9 +28,9 @@ const tutorQA = [
       "Secrets are sensitive data like API keys, passwords, tokens, and certificates that should never be hardcoded in source code. They can be discovered by attackers through code repositories, logs, or decompiled applications. Use environment variables, secret managers (like Vault or AWS Secrets Manager), and .gitignore to protect them.",
   },
   {
-    question: "How does CipherGuard detect vulnerabilities?",
+    question: "How does ProbCheck detect vulnerabilities?",
     answer:
-      "CipherGuard combines static analysis, pattern matching, and AI-powered code understanding to detect vulnerabilities. It scans your codebase for known vulnerability patterns (OWASP Top 10), analyzes data flow for injection points, checks for hardcoded secrets, and uses machine learning to identify suspicious code patterns that traditional scanners might miss.",
+      "ProbCheck combines static analysis, pattern matching, and AI-powered code understanding to detect vulnerabilities. It scans your codebase for known vulnerability patterns (OWASP Top 10), analyzes data flow for injection points, checks for hardcoded secrets, and uses machine learning to identify suspicious code patterns that traditional scanners might miss.",
   },
 ]
 

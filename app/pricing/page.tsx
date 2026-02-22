@@ -186,9 +186,9 @@ export default function PricingPage() {
           >
             <h2 className="text-2xl font-bold mb-5">More Affordable Than Traditional Bug Bounty Programs</h2>
             <p className="text-muted-foreground leading-relaxed">
-              Bug bounty programs typically cost thousands of dollars per vulnerability discovered. CipherGuard provides
+              Bug bounty programs typically cost thousands of dollars per vulnerability discovered. ProbCheck provides
               continuous, automated security scanning that catches common vulnerabilities before you need to pay bounty
-              hunters. Use CipherGuard to maintain baseline security, then deploy targeted bug bounties for edge-case
+              hunters. Use ProbCheck to maintain baseline security, then deploy targeted bug bounties for edge-case
               testing. It's the cost-effective, layered approach to application security.
             </p>
           </motion.section>

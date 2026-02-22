@@ -15,7 +15,7 @@ const steps = [
     icon: Scan,
     title: "Automated security analysis",
     description:
-      "CipherGuard analyzes your code using static analysis and AI models trained on real-world vulnerabilities and exploit patterns.",
+      "ProbCheck analyzes your code using static analysis and AI models trained on real-world vulnerabilities and exploit patterns.",
   },
   {
     icon: FileCheck,
@@ -40,7 +40,7 @@ export function HowItWorksSection() {
           className="max-w-2xl mb-16"
         >
           <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4">
-            How CipherGuard works
+            How ProbCheck works
           </h2>
           <p className="text-muted-foreground leading-relaxed">
             A straightforward workflow designed for engineering teams. No agents, no configuration,

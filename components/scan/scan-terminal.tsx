@@ -1,3 +1,4 @@
+// components/scan/scan-terminal.tsx
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -65,7 +66,7 @@ export function ScanTerminal({ isScanning }: ScanTerminalProps) {
           <div className="w-3 h-3 rounded-full bg-primary/80" />
         </div>
         <span className="text-xs font-mono text-muted-foreground ml-2">
-          cipherguard --scan --verbose
+          ProbCheck --scan --verbose
         </span>
       </div>
 

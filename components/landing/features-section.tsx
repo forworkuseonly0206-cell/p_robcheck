@@ -61,7 +61,7 @@ export function FeaturesSection() {
             Built for real security work
           </h2>
           <p className="text-muted-foreground mt-4 text-base">
-            CipherGuard focuses on clarity, signal quality, and speed — not dashboards that look impressive but say little.
+            ProbCheck focuses on clarity, signal quality, and speed — not dashboards that look impressive but say little.
           </p>
         </motion.div>
 

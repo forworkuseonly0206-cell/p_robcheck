@@ -1,0 +1,52 @@
+<!-- app/apple-icon.svg - For iOS/Apple devices -->
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background with rounded corners for iOS -->
+  <rect width="180" height="180" fill="#09090b" rx="40"/>
+  
+  <!-- Scale up the pulse wave icon -->
+  <g transform="translate(30, 30) scale(3.33)">
+    <!-- Baseline -->
+    <line 
+      x1="4" 
+      y1="24" 
+      x2="32" 
+      y2="24" 
+      stroke="#10b981" 
+      stroke-opacity="0.2"
+      stroke-width="1"
+      stroke-dasharray="2 2"
+    />
+    
+    <!-- The pulse wave -->
+    <path
+      d="M 4 24 L 8 24 Q 10 24 11 20 L 13 12 L 15 28 L 17 22 Q 18 20 20 20 L 28 8"
+      stroke="url(#pulse-gradient-apple)"
+      stroke-width="2.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    
+    <!-- Checkmark -->
+    <path
+      d="M 16 22 L 18 24 L 22 18"
+      stroke="#06b6d4"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    
+    <!-- Scan points -->
+    <circle cx="11" cy="20" r="1.5" fill="#10b981"/>
+    <circle cx="20" cy="20" r="1.5" fill="#06b6d4" opacity="0.6"/>
+  </g>
+  
+  <defs>
+    <linearGradient id="pulse-gradient-apple" x1="4" y1="24" x2="28" y2="8">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#06b6d4" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+</svg>

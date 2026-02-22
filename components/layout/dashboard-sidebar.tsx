@@ -1,3 +1,4 @@
+// components/layout/dashboard-sidebar.tsx - WITH INTEGRATIONS
 "use client"
 
 import Link from "next/link"
@@ -6,25 +7,36 @@ import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { LayoutDashboard, Scan, FileText, BookOpen, Settings, Menu, LogOut, CreditCard } from "lucide-react"
-import { useState } from "react"
+import { LayoutDashboard, Scan, FileText, BookOpen, Settings, Menu, LogOut, CreditCard, Code2 } from "lucide-react"
+import { useState, useCallback, memo } from "react"
 import { Logo } from "@/components/ui/logo"
+import { supabase } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
 
 const sidebarItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/scan", label: "Run Scan", icon: Scan },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/integrations", label: "Integrations", icon: Code2 }, // ✅ ADDED
   { href: "/docs", label: "Documentation", icon: BookOpen },
   { href: "/pricing", label: "Pricing", icon: CreditCard },
 ]
 
 const bottomItems = [
-  { href: "#", label: "Settings", icon: Settings },
-  { href: "/", label: "Sign Out", icon: LogOut },
+  { href: "/settings", label: "Settings", icon: Settings },
 ]
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+const SidebarContent = memo(({ onNavigate }: { onNavigate?: () => void }) => {
   const pathname = usePathname()
+  const router = useRouter()
+
+  const handleSignOut = useCallback(async () => {
+    if (supabase) {
+      await supabase.auth.signOut()
+    }
+    router.push('/')
+    onNavigate?.()
+  }, [router, onNavigate])
 
   return (
     <div className="flex flex-col h-full">
@@ -68,17 +80,30 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </motion.div>
           </Link>
         ))}
+        
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-muted-foreground hover:bg-white/5 hover:text-foreground transition-all duration-200 font-medium text-sm"
+        >
+          <LogOut className="h-[18px] w-[18px]" />
+          Sign Out
+        </button>
       </div>
     </div>
   )
-}
+})
+
+SidebarContent.displayName = 'SidebarContent'
 
 export function DashboardSidebar() {
   const [isOpen, setIsOpen] = useState(false)
+  
+  const handleNavigate = useCallback(() => {
+    setIsOpen(false)
+  }, [])
 
   return (
     <>
-      {/* Mobile Menu Button */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild>
@@ -87,12 +112,11 @@ export function DashboardSidebar() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-0 glass border-white/5">
-            <SidebarContent onNavigate={() => setIsOpen(false)} />
+            <SidebarContent onNavigate={handleNavigate} />
           </SheetContent>
         </Sheet>
       </div>
 
-      {/* Desktop Sidebar */}
       <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 glass border-r border-white/5 flex-col">
         <SidebarContent />
       </aside>

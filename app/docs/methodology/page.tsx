@@ -9,7 +9,7 @@ export default function MethodologyPage() {
         <h1 className="text-4xl font-semibold">Security Methodology</h1>
 
         <p className="text-muted-foreground text-lg">
-          CipherGuard combines deterministic security analysis with AI-assisted reasoning.
+          ProbCheck combines deterministic security analysis with AI-assisted reasoning.
           We do not rely on probabilistic output alone.
         </p>
 
@@ -46,7 +46,7 @@ export default function MethodologyPage() {
         </section>
 
         <section className="border-t border-border pt-6 text-sm text-muted-foreground">
-          CipherGuard never executes your code and never trains on customer repositories.
+          ProbCheck never executes your code and never trains on customer repositories.
         </section>
       </main>
       <Footer />

@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Upload, Link, Scan, Loader2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Upload, Link, Scan, Loader2, Code2 } from "lucide-react"
 
 interface ScanFormProps {
   onStartScan: (form: FormData, scanType: 'upload' | 'repository') => Promise<any> | void
@@ -17,18 +17,19 @@ interface ScanFormProps {
 }
 
 const languages = [
-  { value: "javascript", label: "JavaScript / TypeScript" },
-  { value: "python", label: "Python" },
-  { value: "go", label: "Go" },
-  { value: "java", label: "Java" },
-  { value: "ruby", label: "Ruby" },
-  { value: "php", label: "PHP" },
-  { value: "csharp", label: "C#" },
+  { value: "javascript", label: "JavaScript", extensions: ".js, .jsx, .mjs" },
+  { value: "typescript", label: "TypeScript", extensions: ".ts, .tsx" },
+  { value: "python", label: "Python", extensions: ".py" },
+  { value: "go", label: "Go", extensions: ".go" },
+  { value: "java", label: "Java", extensions: ".java" },
+  { value: "ruby", label: "Ruby", extensions: ".rb" },
+  { value: "php", label: "PHP", extensions: ".php" },
+  { value: "csharp", label: "C#", extensions: ".cs" },
 ]
 
 export function ScanForm({ onStartScan, isScanning }: ScanFormProps) {
   const [projectName, setProjectName] = useState("")
-  const [language, setLanguage] = useState<string>("javascript")
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["javascript"])
   const [repoUrl, setRepoUrl] = useState("")
   const [sourceType, setSourceType] = useState<"upload" | "repo">("upload")
   const [fileName, setFileName] = useState<string | null>(null)
@@ -47,6 +48,34 @@ export function ScanForm({ onStartScan, isScanning }: ScanFormProps) {
 
   function triggerFilePicker() {
     fileRef.current?.click()
+  }
+
+  // Handle language selection
+  function toggleLanguage(langValue: string) {
+    setSelectedLanguages(prev => {
+      if (prev.includes(langValue)) {
+        // Don't allow deselecting all languages
+        if (prev.length === 1) {
+          setError("Please select at least one language")
+          return prev
+        }
+        return prev.filter(l => l !== langValue)
+      } else {
+        setError(null)
+        return [...prev, langValue]
+      }
+    })
+  }
+
+  // Select all languages
+  function selectAllLanguages() {
+    setSelectedLanguages(languages.map(l => l.value))
+    setError(null)
+  }
+
+  // Clear all languages (keep at least one)
+  function clearAllLanguages() {
+    setSelectedLanguages(["javascript"])
   }
 
   // handle drag & drop
@@ -87,10 +116,18 @@ export function ScanForm({ onStartScan, isScanning }: ScanFormProps) {
     e.preventDefault()
     setError(null)
 
+    // Validate at least one language selected
+    if (selectedLanguages.length === 0) {
+      setError("Please select at least one language")
+      return
+    }
+
     // Build FormData
     const form = new FormData()
     form.append("projectName", projectName || "Unnamed Project")
-    form.append("language", language || "javascript")
+    
+    // Send languages as comma-separated string
+    form.append("language", selectedLanguages.join(","))
 
     if (sourceType === "upload") {
       // Validate file upload
@@ -152,21 +189,72 @@ export function ScanForm({ onStartScan, isScanning }: ScanFormProps) {
           />
         </div>
 
-        {/* Language Selection */}
-        <div className="space-y-2">
-          <Label className="font-mono">Primary Language</Label>
-          <Select value={language} onValueChange={(v) => setLanguage(String(v))} disabled={isScanning}>
-            <SelectTrigger className="bg-secondary border-border">
-              <SelectValue placeholder="Select language" />
-            </SelectTrigger>
-            <SelectContent className="bg-card border-border">
-              {languages.map((lang) => (
-                <SelectItem key={lang.value} value={lang.value}>
-                  {lang.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Language Selection - Multi-select with Checkboxes */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="font-mono flex items-center gap-2">
+              <Code2 className="w-4 h-4" />
+              Select Languages ({selectedLanguages.length} selected)
+            </Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={selectAllLanguages}
+                disabled={isScanning}
+                className="text-xs h-7 px-2"
+              >
+                Select All
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearAllLanguages}
+                disabled={isScanning}
+                className="text-xs h-7 px-2"
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 bg-secondary/50 border border-border rounded-lg p-4">
+            {languages.map((lang) => (
+              <div
+                key={lang.value}
+                className={`flex items-start space-x-3 p-3 rounded-lg transition-colors ${
+                  selectedLanguages.includes(lang.value)
+                    ? 'bg-primary/10 border border-primary/30'
+                    : 'bg-background/50 border border-transparent hover:border-border'
+                }`}
+              >
+                <Checkbox
+                  id={lang.value}
+                  checked={selectedLanguages.includes(lang.value)}
+                  onCheckedChange={() => toggleLanguage(lang.value)}
+                  disabled={isScanning}
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <Label
+                    htmlFor={lang.value}
+                    className="text-sm font-medium cursor-pointer"
+                  >
+                    {lang.label}
+                  </Label>
+                  <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                    {lang.extensions}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            💡 Select multiple languages for mixed codebases (e.g., JavaScript + Python)
+          </p>
         </div>
 
         {/* Source Type Tabs */}

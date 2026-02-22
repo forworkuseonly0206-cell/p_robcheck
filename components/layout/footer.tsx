@@ -107,7 +107,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-white/5 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-muted-foreground">© 2025 CipherGuard. All rights reserved.</p>
+          <p className="text-sm text-muted-foreground">© 2025 ProbCheck. All rights reserved.</p>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span>All systems operational</span>

@@ -9,12 +9,12 @@ import { BookOpen, Scan, Lock, Rocket, ChevronRight, Terminal, AlertTriangle, Co
 
 const docSections = [
   {
-    id: "what-is-cipherguard",
-    title: "What is CipherGuard?",
+    id: "what-is-ProbCheck",
+    title: "What is ProbCheck?",
     icon: BookOpen,
-    content: `CipherGuard is an AI-powered vulnerability scanner designed for modern development teams. It analyzes your source code to detect security vulnerabilities, misconfigurations, and potential attack vectors before they reach production.
+    content: `ProbCheck is an AI-powered vulnerability scanner designed for modern development teams. It analyzes your source code to detect security vulnerabilities, misconfigurations, and potential attack vectors before they reach production.
 
-Unlike traditional static analysis tools that rely solely on pattern matching, CipherGuard uses machine learning models trained on millions of real-world vulnerabilities. This allows it to understand context, reduce false positives, and catch subtle security issues that rule-based scanners miss.
+Unlike traditional static analysis tools that rely solely on pattern matching, ProbCheck uses machine learning models trained on millions of real-world vulnerabilities. This allows it to understand context, reduce false positives, and catch subtle security issues that rule-based scanners miss.
 
 Key capabilities include:
 • SQL Injection detection
@@ -25,13 +25,13 @@ Key capabilities include:
 • Configuration vulnerabilities
 • And 50+ additional vulnerability categories
 
-CipherGuard integrates seamlessly into your development workflow, supporting file uploads, Git repository connections, and CI/CD pipeline integration (coming soon).`,
+ProbCheck integrates seamlessly into your development workflow, supporting file uploads, Git repository connections, and CI/CD pipeline integration (coming soon).`,
   },
   {
     id: "what-we-scan",
     title: "What We Scan For (MVP)",
     icon: Scan,
-    content: `In this MVP release, CipherGuard focuses on the most critical and common vulnerability categories:
+    content: `In this MVP release, ProbCheck focuses on the most critical and common vulnerability categories:
 
 **Injection Vulnerabilities**
 • SQL Injection (SQLi) - Detecting unsanitized database queries
@@ -68,7 +68,7 @@ More vulnerability categories are added with each release based on OWASP Top 10 
     id: "how-to-scan",
     title: "How to Run a Scan",
     icon: Terminal,
-    content: `Running a security scan with CipherGuard is simple and takes just a few steps:
+    content: `Running a security scan with ProbCheck is simple and takes just a few steps:
 
 **Step 1: Navigate to the Scan Page**
 From your dashboard, click "Run Scan" in the sidebar or use the quick action button.
@@ -107,7 +107,7 @@ Once complete, you'll see a summary with severity breakdown. Click "View Full Re
     id: "security-privacy",
     title: "Security & Privacy",
     icon: Lock,
-    content: `At CipherGuard, we take the security of your code as seriously as we take finding vulnerabilities in it.
+    content: `At ProbCheck, we take the security of your code as seriously as we take finding vulnerabilities in it.
 
 **Data Handling**
 • Code is encrypted in transit using TLS 1.3
@@ -134,13 +134,13 @@ Once complete, you'll see a summary with severity breakdown. Click "View Full Re
 • Audit logs for all account activities
 • Two-factor authentication available
 
-For security concerns or to report vulnerabilities in our platform, contact security@cipherguard.ai`,
+For security concerns or to report vulnerabilities in our platform, contact security@ProbCheck.ai`,
   },
   {
     id: "roadmap",
     title: "Roadmap & Coming Features",
     icon: Rocket,
-    content: `We're constantly improving CipherGuard based on user feedback and emerging security needs. Here's what's coming:
+    content: `We're constantly improving ProbCheck based on user feedback and emerging security needs. Here's what's coming:
 
 **Q1 2025**
 • CI/CD Integration - GitHub Actions, GitLab CI, Jenkins support
@@ -166,7 +166,7 @@ For security concerns or to report vulnerabilities in our platform, contact secu
 • Security posture scoring and benchmarking
 • Enterprise on-premise deployment option
 
-Have a feature request? We'd love to hear from you at feedback@cipherguard.ai`,
+Have a feature request? We'd love to hear from you at feedback@ProbCheck.ai`,
   },
 ]
 

@@ -15,13 +15,13 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://cipherguard.ai"),
+  metadataBase: new URL("https://ProbCheck.ai"),
   title: {
-    default: "CipherGuard – AI-Powered Vulnerability Scanner",
-    template: "%s | CipherGuard",
+    default: "ProbCheck – AI-Powered Vulnerability Scanner",
+    template: "%s | ProbCheck",
   },
   description:
-    "CipherGuard helps developers and companies find security bugs in source code using AI and vulnerability scanning. Upload your code, scan for vulnerabilities, and fix them before attackers exploit them.",
+    "ProbCheck helps developers and companies find security bugs in source code using AI and vulnerability scanning. Upload your code, scan for vulnerabilities, and fix them before attackers exploit them.",
   keywords: [
     "AI vulnerability scanner",
     "bug bounty alternative",
@@ -30,27 +30,27 @@ export const metadata: Metadata = {
     "code security",
     "vulnerability detection",
   ],
-  authors: [{ name: "CipherGuard" }],
-  creator: "CipherGuard",
+  authors: [{ name: "ProbCheck" }],
+  creator: "ProbCheck",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://cipherguard.ai",
-    siteName: "CipherGuard",
-    title: "CipherGuard – AI-Powered Vulnerability Scanner",
+    url: "https://ProbCheck.ai",
+    siteName: "ProbCheck",
+    title: "ProbCheck – AI-Powered Vulnerability Scanner",
     description: "Find security bugs in your code before hackers do. AI-powered vulnerability scanning for developers.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "CipherGuard",
+        alt: "ProbCheck",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "CipherGuard – AI-Powered Vulnerability Scanner",
+    title: "ProbCheck – AI-Powered Vulnerability Scanner",
     description: "Find security bugs in your code before hackers do. AI-powered vulnerability scanning for developers.",
     images: ["/og-image.png"],
   },
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
     follow: true,
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icon.svg",
   },
    
 }

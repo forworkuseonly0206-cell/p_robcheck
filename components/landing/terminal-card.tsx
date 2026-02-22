@@ -1,3 +1,4 @@
+// components/landing/terminal-card.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -50,7 +51,7 @@ export function TerminalCard() {
       whileHover={{ scale: 1.01, boxShadow: "0 20px 40px rgba(16, 185, 129, 0.1)" }}
     >
       {/* Terminal header with glassmorphism */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5 bg-gradient-to-r from-white/5 to-transparent backdrop-blur-sm">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5 bg-linear-to-r from-white/5 to-transparent backdrop-blur-sm">
         <div className="flex gap-2">
           {[
             { color: "bg-red-500/80", hover: "group-hover:bg-red-500" },
@@ -72,7 +73,7 @@ export function TerminalCard() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
           >
-            cipherguard scan --deep
+            ProbCheck scan --deep
           </motion.span>
         </div>
         <div className="w-16 flex justify-end">
@@ -95,7 +96,7 @@ export function TerminalCard() {
       <div className="p-6 font-mono text-sm space-y-2.5 h-80 overflow-hidden bg-black/30 backdrop-blur-sm relative">
         {/* Scanline effect */}
         <motion.div
-          className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent pointer-events-none"
+          className="absolute inset-0 bg-linear-to-b from-transparent via-primary/5 to-transparent pointer-events-none"
           animate={{ y: ["-100%", "200%"] }}
           transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
         />

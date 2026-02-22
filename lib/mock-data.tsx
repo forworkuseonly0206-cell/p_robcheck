@@ -1,6 +1,6 @@
 // Scan log lines for terminal animation
 export const scanLogLines = [
-  { text: "> Initializing CipherGuard engine...", delay: 0 },
+  { text: "> Initializing ProbCheck engine...", delay: 0 },
   { text: "> Loading vulnerability patterns...", delay: 500 },
   { text: "> Scanning for hardcoded secrets...", delay: 1000 },
   { text: "> Checking SQL injection patterns...", delay: 1500 },
@@ -11,37 +11,37 @@ export const scanLogLines = [
   { text: "> Results: 2 critical, 5 high, 3 medium, 4 low issues found.", delay: 4000 },
 ]
 
-// FAQ data - renamed to CipherGuard
+// FAQ data - renamed to ProbCheck
 export const faqData = [
   {
-    question: "How does CipherGuard work?",
+    question: "How does ProbCheck work?",
     answer:
-      "CipherGuard combines static analysis security testing (SAST) with machine learning models trained on millions of vulnerabilities. When you upload code or connect a repository, our engine parses your source files, builds an abstract syntax tree, and runs multiple security checks including pattern matching, data flow analysis, and AI-powered vulnerability detection.",
+      "ProbCheck combines static analysis security testing (SAST) with machine learning models trained on millions of vulnerabilities. When you upload code or connect a repository, our engine parses your source files, builds an abstract syntax tree, and runs multiple security checks including pattern matching, data flow analysis, and AI-powered vulnerability detection.",
   },
   {
     question: "Is this a replacement for bug bounty programs?",
     answer:
-      "CipherGuard is designed to complement bug bounty programs, not replace them. Our tool catches the common 80% of vulnerabilities that automated scanners can detect—SQL injection, XSS, hardcoded secrets, etc. We recommend using CipherGuard to clean up your codebase first, then deploying a bug bounty program to find the sophisticated edge cases that require human creativity.",
+      "ProbCheck is designed to complement bug bounty programs, not replace them. Our tool catches the common 80% of vulnerabilities that automated scanners can detect—SQL injection, XSS, hardcoded secrets, etc. We recommend using ProbCheck to clean up your codebase first, then deploying a bug bounty program to find the sophisticated edge cases that require human creativity.",
   },
   {
     question: "What kinds of vulnerabilities can it find?",
     answer:
-      "CipherGuard detects OWASP Top 10 vulnerabilities including SQL Injection, Cross-Site Scripting (XSS), Broken Authentication, Security Misconfigurations, and more. We also detect hardcoded credentials, insecure cryptographic implementations, path traversal vulnerabilities, and language-specific security anti-patterns for JavaScript, Python, Go, Java, and more.",
+      "ProbCheck detects OWASP Top 10 vulnerabilities including SQL Injection, Cross-Site Scripting (XSS), Broken Authentication, Security Misconfigurations, and more. We also detect hardcoded credentials, insecure cryptographic implementations, path traversal vulnerabilities, and language-specific security anti-patterns for JavaScript, Python, Go, Java, and more.",
   },
   {
     question: "Can companies use this in CI/CD pipelines?",
     answer:
-      "Yes! CipherGuard integrates with popular CI/CD platforms including GitHub Actions, GitLab CI, Jenkins, and CircleCI. You can configure automated scans on every pull request and block merges if critical vulnerabilities are detected. Our Pro plan includes API access for custom integrations.",
+      "Yes! ProbCheck integrates with popular CI/CD platforms including GitHub Actions, GitLab CI, Jenkins, and CircleCI. You can configure automated scans on every pull request and block merges if critical vulnerabilities are detected. Our Pro plan includes API access for custom integrations.",
   },
   {
     question: "Is my code stored securely?",
     answer:
-      "Your code security is our top priority. Uploaded code is encrypted in transit and at rest, processed in isolated containers, and automatically deleted after scan completion unless you explicitly choose to retain it. We never train our AI models on customer code. CipherGuard is SOC 2 Type II compliant.",
+      "Your code security is our top priority. Uploaded code is encrypted in transit and at rest, processed in isolated containers, and automatically deleted after scan completion unless you explicitly choose to retain it. We never train our AI models on customer code. ProbCheck is SOC 2 Type II compliant.",
   },
   {
     question: "What programming languages are supported?",
     answer:
-      "CipherGuard currently supports JavaScript/TypeScript, Python, Go, Java, Ruby, PHP, and C#. We're continuously adding support for more languages. Each language has specialized detection rules and AI models trained on language-specific vulnerability patterns.",
+      "ProbCheck currently supports JavaScript/TypeScript, Python, Go, Java, Ruby, PHP, and C#. We're continuously adding support for more languages. Each language has specialized detection rules and AI models trained on language-specific vulnerability patterns.",
   },
 ]
 
@@ -304,9 +304,9 @@ router.post('/login', loginLimiter, async (req, res) => {
   },
 ]
 
-// Detailed scan logs for the scan page animation - renamed to CipherGuard
+// Detailed scan logs for the scan page animation - renamed to ProbCheck
 export const detailedScanLogs = [
-  { text: "[INIT] CipherGuard v2.4.1 starting...", type: "info", delay: 0 },
+  { text: "[INIT] ProbCheck v2.4.1 starting...", type: "info", delay: 0 },
   { text: "[INIT] Loading security modules...", type: "info", delay: 300 },
   { text: "[INIT] Parsing source files...", type: "info", delay: 600 },
   { text: "[SCAN] Running static analysis...", type: "info", delay: 1000 },

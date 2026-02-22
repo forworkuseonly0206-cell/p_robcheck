@@ -49,7 +49,7 @@ export function TrustedBySection() {
               {/* Microsoft special case */}
               {company.type === "microsoft" ? (
                 <span className="brand-wordmark microsoft">
-                  <span className="grid grid-cols-2 gap-[2px]">
+                  <span className="grid grid-cols-2 gap-0.5">
                     <span className="w-2.5 h-2.5 bg-[#F25022]" />
                     <span className="w-2.5 h-2.5 bg-[#7FBA00]" />
                     <span className="w-2.5 h-2.5 bg-[#00A4EF]" />

@@ -1,11 +1,11 @@
-// app/api/scan/route.ts
+// app/api/scan/route.ts - FIXED PRO TIER DETECTION
 import { advancedAnalyzeFiles } from '@/lib/advanced-scanner'
-import { getUserSubscription } from '@/lib/subscription'
 import { canUserScan, decrementScanCount } from "@/lib/subscription"
 import { NextResponse } from "next/server"
 import AdmZip from "adm-zip"
 import { analyzeFiles } from "@/lib/scanner"
 import { sendScanCompleteEmail } from "@/lib/email"
+import { shouldSendScanEmail } from "@/lib/email-check"
 import { 
   createScan, 
   updateScanStatus, 
@@ -19,9 +19,6 @@ import { updateUsageStats } from "@/lib/usage-stats"
 import { logAudit } from "@/lib/audit-log"
 
 export const runtime = "nodejs"
-
-const APP_ENV = process.env.NEXT_PUBLIC_APP_ENV || "production"
-const isTesting = APP_ENV !== "production"
 
 const SKIP_DIRS = [
   "node_modules", ".git", ".next", "dist", "build", "out",
@@ -55,30 +52,58 @@ function getAllowedExtensions(language: string): string[] {
 
 export async function POST(req: Request) {
   const startTime = Date.now()
-  let scanId: string | null = null
+  let scanId = ""
+  let userEmail = ""
+  let userName = ""
+  let userId = ""
 
   try {
     const form = await req.formData()
 
     const file = form.get("file") as File | null
     const projectName = String(form.get("projectName") || "unnamed-project")
-    const userId = form.get("userId") ? String(form.get("userId")) : null
+    const userIdFromForm = form.get("userId") ? String(form.get("userId")) : null
     const language = String(form.get("language") || "javascript")
 
-    if (!userId) {
+    if (!userIdFromForm) {
       return NextResponse.json(
         { error: "Authentication required. Please sign in to scan." },
         { status: 401 }
       )
     }
 
-    const { data: profile } = await supabaseAdmin
+    userId = userIdFromForm
+
+    // ✅ FIX 1: Load profile with better error handling
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .single()
 
-    const scanCheck = await canUserScan(userId as string)
+    if (profileError || !profile) {
+      console.error('❌ Profile load error:', profileError)
+      return NextResponse.json(
+        { error: "Failed to load user profile" },
+        { status: 500 }
+      )
+    }
+
+    userEmail = profile.email || ""
+    userName = profile.full_name || ""
+
+    // ✅ FIX 2: Determine plan type BEFORE scan check
+    const planType = (profile.plan_type || "free").toLowerCase()
+    const isPro = planType === 'pro' || planType === 'enterprise'
+
+    console.log(`\n🔍 USER PLAN CHECK:`)
+    console.log(`   User ID: ${userId}`)
+    console.log(`   Plan Type from DB: ${profile.plan_type}`)
+    console.log(`   Normalized Plan: ${planType}`)
+    console.log(`   Is Pro: ${isPro}`)
+    console.log(`   Scanner Tier: ${isPro ? 'ADVANCED' : 'BASIC'}\n`)
+
+    const scanCheck = await canUserScan(userId)
 
     if (!scanCheck.allowed) {
       return NextResponse.json(
@@ -95,14 +120,14 @@ export async function POST(req: Request) {
     }
 
     const scan = await createScan({
-      user_id: userId as string,
+      user_id: userId,
       scan_name: projectName,
       repository_name: file.name,
     })
 
     scanId = scan.id
 
-    await updateScanStatus(scanId as string, "scanning", 0)
+    await updateScanStatus(scanId, "scanning", 0)
 
     const buffer = Buffer.from(await file.arrayBuffer())
     const zip = new AdmZip(buffer)
@@ -127,39 +152,85 @@ export async function POST(req: Request) {
 
     const safeFiles = files.slice(0, 30)
 
-    const subscription = await getUserSubscription(userId as string)
-    const isPro = subscription?.planType === 'pro' || subscription?.planType === 'enterprise'
-
-    console.log(`📊 Scanning with ${isPro ? 'ADVANCED' : 'BASIC'} tier`)
+    // ✅ FIX 3: Use the isPro we determined earlier
+    console.log(`📊 Scanning with ${isPro ? '🚀 ADVANCED (Pro)' : '⚡ BASIC (Free)'} tier`)
 
     const report = isPro
       ? await advancedAnalyzeFiles(safeFiles, { 
           projectName, 
           language,
-          userId: userId as string,
-          scanId: scanId as string
+          userId: userId,
+          scanId: scanId
         })
       : await analyzeFiles(safeFiles, { projectName, language })
 
-    await saveVulnerabilitiesToDB(scanId as string, report.results || [])
+    if (report.error) {
+      console.error(`❌ Scan failed with error: ${report.error}`)
+      
+      await failScan(scanId, report.error)
+      
+      const shouldSendEmail = await shouldSendScanEmail(userId)
+      if (shouldSendEmail && userEmail) {
+        try {
+          await sendScanCompleteEmail({
+            userEmail,
+            userName: userName || undefined,
+            scanId: scanId,
+            projectName,
+            summary: { critical: 0, high: 0, medium: 0, low: 0 },
+            filesScanned: 0,
+            error: report.error,
+            selectedLanguage: language
+          })
+          console.log('✅ Error notification email sent')
+        } catch (emailError) {
+          console.error('⚠️ Failed to send error email:', emailError)
+        }
+      }
+      
+      return NextResponse.json(
+        { 
+          error: report.error,
+          scanId,
+          selectedLanguage: language,
+          uploadedFiles: files.map(f => f.path)
+        },
+        { status: 400 }
+      )
+    }
+
+    await saveVulnerabilitiesToDB(scanId, report.results || [])
 
     const durationSeconds = Math.round((Date.now() - startTime) / 1000)
 
-    await completeScan(scanId as string, {
+    await completeScan(scanId, {
       total_files_scanned: safeFiles.length,
       scan_duration_seconds: durationSeconds,
     })
 
-    await sendScanCompleteEmail({
-      userEmail: profile.email,
-      userName: profile.full_name,
-      scanId: scanId as string,
-      projectName,
-      summary: report.summary,
-      filesScanned: safeFiles.length,
-    })
+    const shouldSendEmail = await shouldSendScanEmail(userId)
+    
+    if (shouldSendEmail && userEmail) {
+      try {
+        await sendScanCompleteEmail({
+          userEmail,
+          userName: userName || undefined,
+          scanId: scanId,
+          projectName,
+          summary: report.summary,
+          filesScanned: safeFiles.length,
+          warnings: report.warnings,
+          selectedLanguage: language
+        })
+        console.log('✅ Scan completion email sent')
+      } catch (emailError) {
+        console.error('⚠️ Failed to send email, but scan completed:', emailError)
+      }
+    } else {
+      console.log('📧 Email notifications disabled by user')
+    }
 
-    await updateUsageStats(userId as string, {
+    await updateUsageStats(userId, {
       scans: 1,
       filesScanned: safeFiles.length,
       vulnerabilitiesFound:
@@ -170,14 +241,14 @@ export async function POST(req: Request) {
     })
 
     await logAudit({
-      userId: userId as string,
+      userId: userId,
       action: "scan_completed",
       resourceType: "scan",
-      resourceId: scanId as string,
+      resourceId: scanId,
       metadata: { projectName, language, filesScanned: safeFiles.length },
     })
 
-    await decrementScanCount(userId as string)
+    await decrementScanCount(userId)
 
     const finalReport = {
       scanId,
@@ -187,7 +258,8 @@ export async function POST(req: Request) {
       filesScanned: safeFiles.length,
       durationSeconds,
       language,
-      scannerTier: isPro ? 'advanced' : 'basic',
+      scannerTier: isPro ? 'advanced' : 'basic',  // ✅ FIX 4: Use correct isPro value
+      warnings: report.warnings,
     }
 
     setLastReport(finalReport)
@@ -195,8 +267,27 @@ export async function POST(req: Request) {
     return NextResponse.json(finalReport)
 
   } catch (err: any) {
+    console.error('❌ Scan error:', err)
+    
     if (scanId) {
-      await failScan(scanId as string, String(err?.message || err))
+      await failScan(scanId, String(err?.message || err))
+      
+      try {
+        const shouldSendEmail = await shouldSendScanEmail(userId)
+        if (shouldSendEmail && userEmail) {
+          await sendScanCompleteEmail({
+            userEmail,
+            userName: userName || undefined,
+            scanId,
+            projectName: 'Scan',
+            summary: { critical: 0, high: 0, medium: 0, low: 0 },
+            filesScanned: 0,
+            error: String(err?.message || err)
+          })
+        }
+      } catch (emailError) {
+        console.error('⚠️ Failed to send error email:', emailError)
+      }
     }
 
     return NextResponse.json(

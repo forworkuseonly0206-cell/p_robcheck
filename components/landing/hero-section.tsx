@@ -42,7 +42,7 @@ export function HeroSection() {
               transition={{ delay: 0.1, duration: 0.6 }}
               className="text-lg text-muted-foreground leading-relaxed"
             >
-              CipherGuard analyzes your codebase to identify exploitable vulnerabilities,
+              ProbCheck analyzes your codebase to identify exploitable vulnerabilities,
               prioritize risk, and guide remediation — without slowing down development.
             </motion.p>
 

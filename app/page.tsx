@@ -15,10 +15,10 @@ export default function HomePage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "CipherGuard",
+    name: "ProbCheck",
     description:
       "AI-powered vulnerability scanner for developers. Find security bugs in your code before hackers do.",
-    url: "https://cipherguard.ai",
+    url: "https://ProbCheck.ai",
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Web",
     offers: {

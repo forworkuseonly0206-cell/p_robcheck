@@ -5,6 +5,6 @@ export async function GET() {
     status: "ok",
     timestamp: new Date().toISOString(),
     version: "2.4.1",
-    service: "CipherGuard",
+    service: "ProbCheck",
   })
 }

@@ -1,3 +1,4 @@
+// app/reports/page.tsx
 "use client"
 
 import Link from "next/link"
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Search, FileText, Calendar, AlertTriangle, ExternalLink } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase, isSupabaseReady } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -32,9 +33,16 @@ export default function ReportsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [scans, setScans] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const isMountedRef = useRef(true)
 
   useEffect(() => {
+    isMountedRef.current = true
     loadScans()
+    
+    return () => {
+      isMountedRef.current = false
+      console.log('🛑 Reports page unmounted')
+    }
   }, [])
 
   const loadScans = async () => {
@@ -49,10 +57,18 @@ export default function ReportsPage() {
       return
     }
 
+    console.log('📡 Reports page fetching scans')
     const res = await fetch(`/api/user/scans?userId=${session.user.id}`)
     const data = await res.json()
-    if (data.scans) setScans(data.scans)
-    setLoading(false)
+    
+    if (isMountedRef.current && data.scans) {
+      setScans(data.scans)
+      console.log(`✅ Reports page loaded ${data.scans.length} scans`)
+    }
+    
+    if (isMountedRef.current) {
+      setLoading(false)
+    }
   }
 
   const filteredReports = scans.filter((scan) =>

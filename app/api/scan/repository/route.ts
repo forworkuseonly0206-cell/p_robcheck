@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { canUserScan, decrementScanCount } from '@/lib/subscription'
 import { analyzeFiles } from '@/lib/scanner'
 import { sendScanCompleteEmail } from '@/lib/email'
+import { shouldSendScanEmail } from '@/lib/email-check' // ✨ NEW: Import email check
 import {
   createScan,
   updateScanStatus,
@@ -136,17 +137,26 @@ export async function POST(req: NextRequest) {
       scan_duration_seconds: durationSeconds,
     })
 
-    try {
-      await sendScanCompleteEmail({
-        userEmail: profile.email,
-        userName: profile.full_name || undefined,
-        scanId: confirmedScanId,
-        projectName: projectName || 'Repository Scan',
-        summary: report.summary,
-        filesScanned: files.length,
-      })
-    } catch (emailError) {
-      console.error('Failed to send completion email:', emailError)
+    // ✨ NEW: Check user preferences before sending email
+    const shouldSendEmail = await shouldSendScanEmail(userId)
+    
+    if (shouldSendEmail) {
+      try {
+        await sendScanCompleteEmail({
+          userEmail: profile.email,
+          userName: profile.full_name || undefined,
+          scanId: confirmedScanId,
+          projectName: projectName || 'Repository Scan',
+          summary: report.summary,
+          filesScanned: files.length,
+        })
+        console.log('✅ Scan completion email sent')
+      } catch (emailError) {
+        console.error('⚠️ Failed to send email, but scan completed:', emailError)
+        // Don't fail the scan if email fails
+      }
+    } else {
+      console.log('📧 Email notifications disabled by user')
     }
 
     try {

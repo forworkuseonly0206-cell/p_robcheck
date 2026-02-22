@@ -39,7 +39,7 @@ export function AttackStorySection() {
             </h2>
 
             <p className="text-muted-foreground leading-relaxed">
-              Individual vulnerabilities rarely exist in isolation. CipherGuard maps how issues can be chained together
+              Individual vulnerabilities rarely exist in isolation. ProbCheck maps how issues can be chained together
               into realistic attack paths — helping teams focus on what actually matters.
             </p>
 

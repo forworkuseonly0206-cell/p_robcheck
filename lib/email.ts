@@ -7,7 +7,7 @@ let resendInstance: Resend | null = null
 function getResend(): Resend {
   if (!resendInstance) {
     const apiKey = process.env.RESEND_API_KEY || process.env.NEXT_PUBLIC_RESEND_API_KEY
-        console.log('🔍 Checking Resend API key:', {
+    console.log('🔍 Checking Resend API key:', {
       hasResendKey: !!process.env.RESEND_API_KEY,
       hasPublicKey: !!process.env.NEXT_PUBLIC_RESEND_API_KEY,
       nodeEnv: process.env.NODE_ENV,
@@ -22,7 +22,7 @@ function getResend(): Resend {
   return resendInstance
 }
 
-const FROM_EMAIL = 'CipherGuard <onboarding@resend.dev>' // Change this after verifying your domain
+const FROM_EMAIL = 'ProbCheck <onboarding@resend.dev>' // Change this after verifying your domain
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 /**
@@ -39,7 +39,7 @@ export async function sendOTPEmail(data: {
     const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: data.email,
-      subject: `🔐 Your CipherGuard Verification Code`,
+      subject: `🔐 Your ProbCheck Verification Code`,
       html: `
 <!DOCTYPE html>
 <html>
@@ -64,7 +64,7 @@ export async function sendOTPEmail(data: {
     <div class="content">
       <p>Hi there,</p>
       
-      <p>Your verification code for ${data.type === 'signup' ? 'creating your CipherGuard account' : 'signing in to CipherGuard'} is:</p>
+      <p>Your verification code for ${data.type === 'signup' ? 'creating your ProbCheck account' : 'signing in to ProbCheck'} is:</p>
       
       <div class="otp-box">
         <div class="otp-code">${data.otp}</div>
@@ -72,7 +72,7 @@ export async function sendOTPEmail(data: {
       </div>
       
       <div class="warning">
-        <strong>⚠️ Security Notice:</strong> Never share this code with anyone. CipherGuard will never ask for your verification code.
+        <strong>⚠️ Security Notice:</strong> Never share this code with anyone. ProbCheck will never ask for your verification code.
       </div>
       
       <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
@@ -80,7 +80,7 @@ export async function sendOTPEmail(data: {
       </p>
     </div>
     <div class="footer">
-      <p>CipherGuard - AI-Powered Security Scanner</p>
+      <p>ProbCheck - AI-Powered Security Scanner</p>
       <p><a href="${APP_URL}" style="color: #667eea;">Visit Dashboard</a></p>
     </div>
   </div>
@@ -97,11 +97,11 @@ export async function sendOTPEmail(data: {
 }
 
 /**
- * Send scan completion email
+ * Send scan completion email (✨ UPDATED - now supports errors and warnings)
  */
 export async function sendScanCompleteEmail(data: {
   userEmail: string
-  userName?: string
+  userName?: string | undefined
   scanId: string
   projectName: string
   summary: {
@@ -111,16 +111,25 @@ export async function sendScanCompleteEmail(data: {
     low: number
   }
   filesScanned: number
+  error?: string
+  warnings?: string[]
+  selectedLanguage?: string
 }) {
   try {
     const resend = getResend()
     const total = data.summary.critical + data.summary.high + data.summary.medium + data.summary.low
     const reportUrl = `${APP_URL}/reports/${data.scanId}`
+    
+    // ✨ Determine email type
+    const hasError = !!data.error
+    const hasWarnings = !!(data.warnings && data.warnings.length > 0)
 
     await resend.emails.send({
       from: FROM_EMAIL,
       to: data.userEmail,
-      subject: `✅ Security Scan Complete: ${data.projectName}`,
+      subject: hasError 
+        ? `❌ Scan Failed: ${data.projectName}`
+        : `✅ Security Scan Complete: ${data.projectName}`,
       html: `
 <!DOCTYPE html>
 <html>
@@ -128,9 +137,12 @@ export async function sendScanCompleteEmail(data: {
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+    .header { background: ${hasError ? '#dc2626' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
     .header h1 { color: white; margin: 0; font-size: 24px; }
     .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+    .error-box { background: #fee2e2; border-left: 4px solid #dc2626; padding: 15px; border-radius: 4px; margin: 20px 0; }
+    .error-box h3 { margin: 0 0 10px 0; color: #991b1b; }
+    .warning-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 4px; margin: 20px 0; }
     .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }
     .stat-card { background: white; padding: 15px; border-radius: 8px; text-align: center; border: 2px solid #e5e7eb; }
     .stat-value { font-size: 32px; font-weight: bold; margin: 5px 0; }
@@ -140,69 +152,107 @@ export async function sendScanCompleteEmail(data: {
     .low { color: #3b82f6; }
     .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600; }
     .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
+    .info-list { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    .info-list li { margin: 8px 0; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>🔒 Security Scan Complete</h1>
+      <h1>${hasError ? '❌ Scan Failed' : '🔒 Security Scan Complete'}</h1>
     </div>
     <div class="content">
       <p>Hi ${data.userName || 'there'},</p>
       
-      <p>Your security scan for <strong>${data.projectName}</strong> is complete!</p>
-      
-      <p><strong>Scanned:</strong> ${data.filesScanned} file${data.filesScanned !== 1 ? 's' : ''}</p>
-      
-      ${total > 0 ? `
-      <h3>Vulnerabilities Found: ${total}</h3>
-      
-      <div class="stats">
-        ${data.summary.critical > 0 ? `
-        <div class="stat-card">
-          <div class="stat-value critical">${data.summary.critical}</div>
-          <div>Critical</div>
+      ${hasError ? `
+        <!-- ERROR CASE -->
+        <div class="error-box">
+          <h3>🚫 Scan Error</h3>
+          <p style="margin: 0;">${data.error}</p>
         </div>
-        ` : ''}
-        ${data.summary.high > 0 ? `
-        <div class="stat-card">
-          <div class="stat-value high">${data.summary.high}</div>
-          <div>High</div>
+        
+        <div class="info-list">
+          <strong>Scan Details:</strong>
+          <ul>
+            <li><strong>Project:</strong> ${data.projectName}</li>
+            <li><strong>Selected Language:</strong> ${data.selectedLanguage || 'All'}</li>
+            <li><strong>Scan ID:</strong> ${data.scanId}</li>
+          </ul>
         </div>
-        ` : ''}
-        ${data.summary.medium > 0 ? `
-        <div class="stat-card">
-          <div class="stat-value medium">${data.summary.medium}</div>
-          <div>Medium</div>
+        
+        <div class="info-list">
+          <strong>💡 How to Fix:</strong>
+          <ul>
+            <li>Make sure your uploaded .zip file contains ${data.selectedLanguage || 'valid code'} files</li>
+            <li>Or select "All Languages" if you have a mixed codebase</li>
+            <li>Verify that file extensions match the selected language</li>
+          </ul>
         </div>
-        ` : ''}
-        ${data.summary.low > 0 ? `
-        <div class="stat-card">
-          <div class="stat-value low">${data.summary.low}</div>
-          <div>Low</div>
-        </div>
-        ` : ''}
-      </div>
-      
-      ${data.summary.critical > 0 || data.summary.high > 0 ? `
-      <p style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; border-radius: 4px; margin: 20px 0;">
-        <strong>⚠️ Action Required:</strong> Critical or high-severity vulnerabilities were found. We recommend addressing these immediately.
-      </p>
-      ` : ''}
       ` : `
-      <p style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 4px; margin: 20px 0;">
-        <strong>✅ Great news!</strong> No security vulnerabilities were found in your code.
-      </p>
+        <!-- SUCCESS CASE -->
+        <p>Your security scan for <strong>${data.projectName}</strong> is complete!</p>
+        
+        <p><strong>Scanned:</strong> ${data.filesScanned} file${data.filesScanned !== 1 ? 's' : ''}</p>
+        
+        ${hasWarnings ? `
+        <div class="warning-box">
+          <strong>⚠️ Warnings:</strong>
+          <ul style="margin: 10px 0 0 0;">
+            ${data.warnings!.map(w => `<li>${w}</li>`).join('')}
+          </ul>
+        </div>
+        ` : ''}
+        
+        ${total > 0 ? `
+        <h3>Vulnerabilities Found: ${total}</h3>
+        
+        <div class="stats">
+          ${data.summary.critical > 0 ? `
+          <div class="stat-card">
+            <div class="stat-value critical">${data.summary.critical}</div>
+            <div>Critical</div>
+          </div>
+          ` : ''}
+          ${data.summary.high > 0 ? `
+          <div class="stat-card">
+            <div class="stat-value high">${data.summary.high}</div>
+            <div>High</div>
+          </div>
+          ` : ''}
+          ${data.summary.medium > 0 ? `
+          <div class="stat-card">
+            <div class="stat-value medium">${data.summary.medium}</div>
+            <div>Medium</div>
+          </div>
+          ` : ''}
+          ${data.summary.low > 0 ? `
+          <div class="stat-card">
+            <div class="stat-value low">${data.summary.low}</div>
+            <div>Low</div>
+          </div>
+          ` : ''}
+        </div>
+        
+        ${data.summary.critical > 0 || data.summary.high > 0 ? `
+        <p style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; border-radius: 4px; margin: 20px 0;">
+          <strong>⚠️ Action Required:</strong> Critical or high-severity vulnerabilities were found. We recommend addressing these immediately.
+        </p>
+        ` : ''}
+        ` : `
+        <p style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 4px; margin: 20px 0;">
+          <strong>✅ Great news!</strong> No security vulnerabilities were found in your code.
+        </p>
+        `}
+        
+        <a href="${reportUrl}" class="button">View Full Report</a>
+        
+        <p style="margin-top: 30px; font-size: 14px; color: #6b7280;">
+          This scan was performed on ${new Date().toLocaleString()}
+        </p>
       `}
-      
-      <a href="${reportUrl}" class="button">View Full Report</a>
-      
-      <p style="margin-top: 30px; font-size: 14px; color: #6b7280;">
-        This scan was performed on ${new Date().toLocaleString()}
-      </p>
     </div>
     <div class="footer">
-      <p>CipherGuard - AI-Powered Security Scanner</p>
+      <p>ProbCheck - AI-Powered Security Scanner</p>
       <p><a href="${APP_URL}" style="color: #667eea;">Dashboard</a> • <a href="${APP_URL}/pricing" style="color: #667eea;">Upgrade</a></p>
     </div>
   </div>
@@ -211,7 +261,7 @@ export async function sendScanCompleteEmail(data: {
       `,
     })
 
-    console.log(`📧 Scan complete email sent to ${data.userEmail}`)
+    console.log(`📧 Scan ${hasError ? 'error' : 'complete'} email sent to ${data.userEmail}`)
   } catch (error) {
     console.error('Failed to send scan complete email:', error)
   }
@@ -222,7 +272,7 @@ export async function sendScanCompleteEmail(data: {
  */
 export async function sendScanLimitEmail(data: {
   userEmail: string
-  userName?: string
+  userName?: string | undefined
   scansUsed: number
   planName: string
 }) {
@@ -294,7 +344,7 @@ export async function sendScanLimitEmail(data: {
  */
 export async function sendWelcomeEmail(data: {
   userEmail: string
-  userName?: string
+  userName?: string | undefined
 }) {
   try {
     const resend = getResend()
@@ -302,7 +352,7 @@ export async function sendWelcomeEmail(data: {
     await resend.emails.send({
       from: FROM_EMAIL,
       to: data.userEmail,
-      subject: `🎉 Welcome to CipherGuard!`,
+      subject: `🎉 Welcome to ProbCheck!`,
       html: `
 <!DOCTYPE html>
 <html>
@@ -322,7 +372,7 @@ export async function sendWelcomeEmail(data: {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🎉 Welcome to CipherGuard!</h1>
+      <h1>🎉 Welcome to ProbCheck!</h1>
       <p style="color: #e0e7ff; margin-top: 10px;">Your AI-powered security scanner is ready</p>
     </div>
     <div class="content">

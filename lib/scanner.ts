@@ -1,4 +1,4 @@
-// lib/scanner.ts - PRODUCTION-READY VERSION
+// lib/scanner.ts - UPDATED FOR MULTI-LANGUAGE SUPPORT
 import { callGeminiJSON } from "./openai"
 
 const MAX_SCAN_FILES = parseInt(process.env.MAX_SCAN_FILES || "30")
@@ -7,8 +7,76 @@ const MAX_FILE_BYTES = parseInt(process.env.MAX_FILE_BYTES || "50000")
 export type FileItem = { path: string; content: string }
 
 /* =====================================
+   LANGUAGE EXTENSIONS MAPPING
+===================================== */
+const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
+  "JavaScript / TypeScript": [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"],
+  "javascript": [".js", ".jsx", ".mjs", ".cjs"],
+  "typescript": [".ts", ".tsx"],
+  "Python": [".py", ".pyw", ".pyx"],
+  "python": [".py", ".pyw", ".pyx"],
+  "Go": [".go"],
+  "go": [".go"],
+  "Java": [".java", ".jsp"],
+  "java": [".java", ".jsp"],
+  "Ruby": [".rb", ".rake", ".gemspec"],
+  "ruby": [".rb", ".rake", ".gemspec"],
+  "PHP": [".php", ".phtml", ".php3", ".php4", ".php5"],
+  "php": [".php", ".phtml", ".php3", ".php4", ".php5"],
+  "C#": [".cs", ".cshtml", ".razor"],
+  "csharp": [".cs", ".cshtml", ".razor"]
+}
+
+/**
+ * Filter files by selected languages (supports multiple)
+ */
+function filterFilesByLanguage(files: FileItem[], language?: string): {
+  matchedFiles: FileItem[]
+  unmatchedFiles: FileItem[]
+  error?: string
+} {
+  // If no language specified, scan all files
+  if (!language || language === "all") {
+    return { matchedFiles: files, unmatchedFiles: [] }
+  }
+
+  // Handle multiple languages (comma-separated)
+  const selectedLanguages = language.split(",").map(l => l.trim().toLowerCase())
+  
+  // Collect all extensions for selected languages
+  const allExtensions: string[] = []
+  for (const lang of selectedLanguages) {
+    const extensions = LANGUAGE_EXTENSIONS[lang]
+    if (extensions) {
+      allExtensions.push(...extensions)
+    }
+  }
+
+  if (allExtensions.length === 0) {
+    return {
+      matchedFiles: [],
+      unmatchedFiles: files,
+      error: `Unknown language(s): ${language}`
+    }
+  }
+
+  const matchedFiles: FileItem[] = []
+  const unmatchedFiles: FileItem[] = []
+
+  for (const file of files) {
+    const fileExt = file.path.substring(file.path.lastIndexOf('.')).toLowerCase()
+    if (allExtensions.includes(fileExt)) {
+      matchedFiles.push(file)
+    } else {
+      unmatchedFiles.push(file)
+    }
+  }
+
+  return { matchedFiles, unmatchedFiles }
+}
+
+/* =====================================
    REAL VULNERABILITY PATTERNS
-   These are actual security patterns
 ===================================== */
 
 interface VulnerabilityPattern {
@@ -265,12 +333,6 @@ function performStaticAnalysis(file: FileItem, selectedLanguage?: string): Array
   const detectedLang = detectLanguage(file.path)
   const findings: any[] = []
 
-  // If user selected a language, only scan files matching that language
-  if (selectedLanguage && selectedLanguage !== 'javascript' && detectedLang !== selectedLanguage) {
-    console.log(`  ⏭️ Skipping ${file.path} (${detectedLang}) - doesn't match selected language (${selectedLanguage})`)
-    return []
-  }
-
   const lines = file.content.split('\n')
 
   for (const pattern of VULNERABILITY_PATTERNS) {
@@ -369,8 +431,69 @@ Return ONLY valid JSON array:
 export async function analyzeFiles(
   files: FileItem[],
   opts: { projectName?: string; language?: string } = {}
-) {
-  const limited = files.slice(0, MAX_SCAN_FILES)
+): Promise<{
+  project: string
+  summary: { critical: number; high: number; medium: number; low: number }
+  results: Array<{
+    path: string
+    findings: Array<{
+      severity: string
+      title?: string
+      description: string
+      suggestedFix?: string
+      snippet?: string
+      cwe?: string
+      line?: number
+    }>
+  }>
+  error?: string
+  warnings?: string[]
+}> {
+  console.log(`\n🔍 Starting Professional Security Scan`)
+  console.log(`📁 Total Files: ${files.length}`)
+  console.log(`🎯 Selected Languages: ${opts.language || 'all languages'}`)
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)
+
+  // CRITICAL: Filter files by language
+  const { matchedFiles, unmatchedFiles, error } = filterFilesByLanguage(files, opts.language)
+
+  // Check for language mismatch error
+  if (error) {
+    console.error(`❌ ${error}`)
+    return {
+      project: opts.projectName || "project",
+      summary: { critical: 0, high: 0, medium: 0, low: 0 },
+      results: [],
+      error: error
+    }
+  }
+
+  // Check if no files match the selected language
+  if (matchedFiles.length === 0 && opts.language && opts.language !== "all") {
+    const selectedLangs = opts.language.split(",").join(", ")
+    const errorMsg = `No ${selectedLangs} files found in the uploaded code. Found files: ${unmatchedFiles.slice(0, 10).map(f => f.path).join(", ")}${unmatchedFiles.length > 10 ? '...' : ''}`
+    console.error(`❌ ${errorMsg}`)
+    return {
+      project: opts.projectName || "project",
+      summary: { critical: 0, high: 0, medium: 0, low: 0 },
+      results: [],
+      error: errorMsg
+    }
+  }
+
+  // Warn about unmatched files
+  const warnings: string[] = []
+  if (unmatchedFiles.length > 0 && opts.language && opts.language !== "all") {
+    const selectedLangs = opts.language.split(",").join(", ")
+    const warning = `${unmatchedFiles.length} file(s) skipped (not ${selectedLangs}): ${unmatchedFiles.slice(0, 5).map(f => f.path).join(", ")}${unmatchedFiles.length > 5 ? '...' : ''}`
+    console.warn(`⚠️  ${warning}`)
+    warnings.push(warning)
+  }
+
+  console.log(`✅ Matched ${matchedFiles.length} files for selected languages`)
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)
+
+  const limited = matchedFiles.slice(0, MAX_SCAN_FILES)
   const results: Array<{
     path: string
     findings: Array<{
@@ -383,11 +506,6 @@ export async function analyzeFiles(
       line?: number
     }>
   }> = []
-
-  console.log(`\n🔍 Starting Professional Security Scan`)
-  console.log(`📁 Files to scan: ${limited.length}`)
-  console.log(`🎯 Target language: ${opts.language || 'all languages'}`)
-  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`)
 
   for (const file of limited) {
     let snippet = file.content
@@ -447,5 +565,6 @@ export async function analyzeFiles(
     project: opts.projectName || "project",
     summary,
     results,
+    warnings: warnings.length > 0 ? warnings : undefined
   }
 }
