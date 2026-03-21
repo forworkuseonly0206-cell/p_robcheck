@@ -1,12 +1,10 @@
-// app/api/auth/verify-otp/route.ts
+// app/api/auth/verify-otp/route.ts - FIXED (ONLY VERIFIES, DOESN'T CREATE)
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyOTP } from '@/lib/otp-store'
+import { verifyAuthOTP } from '@/lib/auth-email'
 
 export async function POST(request: NextRequest) {
   try {
     const { email, otp, type } = await request.json()
-
-    console.log('🔐 Verify OTP request:', { email, otp: otp?.substring(0, 2) + '****', type })
 
     if (!email || !otp) {
       return NextResponse.json(
@@ -17,26 +15,28 @@ export async function POST(request: NextRequest) {
 
     if (otp.length !== 6) {
       return NextResponse.json(
-        { error: 'OTP must be 6 digits' },
+        { error: 'OTP must be exactly 6 digits' },
         { status: 400 }
       )
     }
 
-    // Verify OTP
-    const result = verifyOTP(email, otp)
+    // ✅ ONLY verify the OTP - DON'T create user yet!
+    const result = await verifyAuthOTP(email, otp)
 
-    if (!result.valid) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: result.error || 'Invalid OTP' },
+        { error: 'Invalid verification code' },
         { status: 400 }
       )
     }
 
-    console.log('✅ OTP verified successfully for:', email)
+    console.log('✅ OTP verified for:', email)
 
+    // Just return success - user will be created in create-account route
     return NextResponse.json({ 
       success: true, 
-      verified: true 
+      verified: true,
+      email: email.toLowerCase()
     })
   } catch (error: any) {
     console.error('❌ Verify OTP error:', error)

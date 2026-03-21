@@ -1,4 +1,4 @@
-// lib/email.ts
+// lib/email.ts - COMPLETE FILE WITH YOUR DOMAIN
 import { Resend } from 'resend'
 
 // Initialize Resend lazily
@@ -22,7 +22,8 @@ function getResend(): Resend {
   return resendInstance
 }
 
-const FROM_EMAIL = 'ProbCheck <onboarding@resend.dev>' // Change this after verifying your domain
+// ✅ UPDATED: Using your verified domain
+const FROM_EMAIL = 'ProbCheck <noreply@probcheck.in>'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 /**
@@ -97,7 +98,7 @@ export async function sendOTPEmail(data: {
 }
 
 /**
- * Send scan completion email (✨ UPDATED - now supports errors and warnings)
+ * Send scan completion email (supports errors and warnings)
  */
 export async function sendScanCompleteEmail(data: {
   userEmail: string
@@ -120,7 +121,6 @@ export async function sendScanCompleteEmail(data: {
     const total = data.summary.critical + data.summary.high + data.summary.medium + data.summary.low
     const reportUrl = `${APP_URL}/reports/${data.scanId}`
     
-    // ✨ Determine email type
     const hasError = !!data.error
     const hasWarnings = !!(data.warnings && data.warnings.length > 0)
 
