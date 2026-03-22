@@ -1,8 +1,13 @@
 User-agent: *
 Allow: /
-Disallow: /api/*
-Disallow: /dashboard
-Disallow: /scan
-Disallow: /reports
 
-Sitemap: /sitemap.xml
+# Block API routes from indexing
+Disallow: /api/
+
+# Allow all public pages
+Allow: /
+Allow: /pricing
+Allow: /docs
+
+# Sitemap location
+Sitemap: https://probcheck.in/sitemap.xml

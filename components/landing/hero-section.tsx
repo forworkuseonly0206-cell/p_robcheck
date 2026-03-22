@@ -1,3 +1,4 @@
+// components/landing/hero-section.tsx
 "use client"
 
 import Link from "next/link"

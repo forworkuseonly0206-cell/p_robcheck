@@ -1,3 +1,4 @@
+// app/layout.tsx - FIXED
 import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
@@ -15,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://ProbCheck.ai"),
+  metadataBase: new URL("https://probcheck.in"),  // ✅ FIXED - correct domain
   title: {
     default: "ProbCheck – AI-Powered Vulnerability Scanner",
     template: "%s | ProbCheck",
@@ -29,13 +30,16 @@ export const metadata: Metadata = {
     "AI security tool for developers",
     "code security",
     "vulnerability detection",
+    "probcheck",
+    "security scanner",
+    "code scanner",
   ],
   authors: [{ name: "ProbCheck" }],
   creator: "ProbCheck",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://ProbCheck.ai",
+    url: "https://probcheck.in",  // ✅ FIXED
     siteName: "ProbCheck",
     title: "ProbCheck – AI-Powered Vulnerability Scanner",
     description: "Find security bugs in your code before hackers do. AI-powered vulnerability scanning for developers.",
@@ -57,11 +61,19 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
   icons: {
     icon: "/icon.svg",
   },
-   
+  alternates: {
+    canonical: "https://probcheck.in",  // ✅ ADDED
+  },
 }
 
 export const viewport: Viewport = {

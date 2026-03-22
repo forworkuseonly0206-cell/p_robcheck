@@ -1,3 +1,4 @@
+// components/landing/features-section.tsx
 "use client"
 
 import { motion, useInView } from "framer-motion"
