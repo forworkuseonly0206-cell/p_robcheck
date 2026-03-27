@@ -1,4 +1,4 @@
-// app/layout.tsx - FIXED
+// app/layout.tsx
 import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
@@ -16,48 +16,62 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://probcheck.in"),  // ✅ FIXED - correct domain
+  metadataBase: new URL("https://probcheck.in"),
+  
   title: {
-    default: "ProbCheck – AI-Powered Vulnerability Scanner",
+    default: "ProbCheck - AI Vulnerability Scanner | Find Security Bugs in Code",
     template: "%s | ProbCheck",
   },
+  
   description:
-    "ProbCheck helps developers and companies find security bugs in source code using AI and vulnerability scanning. Upload your code, scan for vulnerabilities, and fix them before attackers exploit them.",
+    "Free AI-powered vulnerability scanner that finds security bugs in your code instantly. Scan JavaScript, Python, Java, PHP & more. No signup required. Trusted by 10,000+ developers.",
+  
   keywords: [
-    "AI vulnerability scanner",
-    "bug bounty alternative",
-    "scan code for security bugs",
-    "AI security tool for developers",
-    "code security",
-    "vulnerability detection",
+    "vulnerability scanner",
+    "code security scanner",
+    "AI security tool",
+    "security testing",
+    "find security bugs",
+    "scan code for vulnerabilities",
     "probcheck",
-    "security scanner",
-    "code scanner",
+    "free vulnerability scanner online",
+    "AI powered code scanner",
+    "automated security testing",
+    "find bugs in code online",
+    "security scanner for developers",
+    "javascript security scanner",
+    "python vulnerability scanner",
+    "java code security",
+    "php security checker",
   ],
+  
   authors: [{ name: "ProbCheck" }],
   creator: "ProbCheck",
+  
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://probcheck.in",  // ✅ FIXED
+    url: "https://probcheck.in",
     siteName: "ProbCheck",
-    title: "ProbCheck – AI-Powered Vulnerability Scanner",
-    description: "Find security bugs in your code before hackers do. AI-powered vulnerability scanning for developers.",
+    title: "ProbCheck - Find Security Bugs in Code with AI",
+    description: "Free AI-powered scanner that finds security vulnerabilities instantly. No signup required.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "ProbCheck",
+        alt: "ProbCheck - AI Security Scanner",
       },
     ],
   },
+  
   twitter: {
     card: "summary_large_image",
-    title: "ProbCheck – AI-Powered Vulnerability Scanner",
-    description: "Find security bugs in your code before hackers do. AI-powered vulnerability scanning for developers.",
+    title: "ProbCheck - AI Vulnerability Scanner",
+    description: "Find security bugs in code instantly. Free AI-powered scanner.",
     images: ["/og-image.png"],
   },
+  
   robots: {
     index: true,
     follow: true,
@@ -68,16 +82,18 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
+  
   icons: {
     icon: "/icon.svg",
   },
+  
   alternates: {
-    canonical: "https://probcheck.in",  // ✅ ADDED
+    canonical: "https://probcheck.in",
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: "#05070C",
+  themeColor: "#06B6D4",
   width: "device-width",
   initialScale: 1,
 }

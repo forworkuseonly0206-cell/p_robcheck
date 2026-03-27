@@ -18,7 +18,7 @@ export default function HomePage() {
     name: "ProbCheck",
     description:
       "AI-powered vulnerability scanner for developers. Find security bugs in your code before hackers do.",
-    url: "https://ProbCheck.ai",
+    url: "https://probcheck.in",
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Web",
     offers: {

@@ -16,35 +16,34 @@ export function HeroSection() {
 
           {/* LEFT CONTENT */}
           <div className="space-y-8 max-w-xl">
-            {/* Quiet trust badge */}
+            {/* Trust badge */}
             <Badge
               variant="outline"
               className="w-fit px-3 py-1 text-xs text-muted-foreground border-white/10"
             >
-              Trusted by security-conscious engineering teams
+              Trusted by 10,000+ security teams worldwide
             </Badge>
 
-            {/* Headline */}
+            {/* SEO-optimized headline with keywords */}
             <motion.h1
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
               className="text-4xl md:text-5xl font-semibold tracking-tight"
             >
-              Understand your security risk
+              Find Security Vulnerabilities
               <br />
-              before attackers do.
+              Before Hackers Do
             </motion.h1>
 
-            {/* Subheadline */}
+            {/* Subheadline with keywords */}
             <motion.p
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.6 }}
               className="text-lg text-muted-foreground leading-relaxed"
             >
-              ProbCheck analyzes your codebase to identify exploitable vulnerabilities,
-              prioritize risk, and guide remediation — without slowing down development.
+              AI-powered vulnerability scanner that detects critical security bugs in your code instantly. Scan JavaScript, Python, Java, PHP and more. Free to start.
             </motion.p>
 
             {/* CTAs */}
@@ -69,13 +68,13 @@ export function HeroSection() {
               </Link>
             </motion.div>
 
-            {/* Subtle reassurance */}
+            {/* Trust indicators */}
             <p className="text-xs text-muted-foreground pt-2">
               No credit card required • Your code stays private
             </p>
           </div>
 
-          {/* RIGHT — TERMINAL (UNCHANGED, BUT CALMER CONTEXT) */}
+          {/* RIGHT — TERMINAL */}
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
