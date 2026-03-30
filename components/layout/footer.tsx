@@ -5,27 +5,18 @@ import { Github, Twitter, Linkedin } from "lucide-react"
 
 const footerLinks = {
   product: [
-    { href: "/scan", label: "Free Security Scan" },
+    { href: "/scan", label: "Scan" },
     { href: "/pricing", label: "Pricing" },
     { href: "/docs", label: "Documentation" },
-    { href: "/docs/api", label: "API Reference" },
-  ],
-  resources: [
-    { href: "/docs/guides", label: "Security Guides" },
-    { href: "/docs/tutorials", label: "Tutorials" },
-    { href: "/docs/vulnerabilities", label: "Vulnerability Database" },
-    { href: "/docs/languages", label: "Supported Languages" },
   ],
   company: [
     { href: "/about", label: "About Us" },
-    { href: "/contact", label: "Contact Support" },
-    { href: "https://github.com/yourusername/probcheck", label: "GitHub" },
-    { href: "https://twitter.com/probcheck", label: "Twitter" },
+    { href: "/contact", label: "Contact" },
   ],
   legal: [
     { href: "/privacy", label: "Privacy Policy" },
     { href: "/terms", label: "Terms of Service" },
-    { href: "/security", label: "Security & Compliance" },
+    { href: "/security", label: "Security" },
   ],
 }
 
@@ -34,18 +25,16 @@ export function Footer() {
     <footer className="border-t border-white/5 bg-black/20">
       <div className="container px-4 md:px-6 py-16">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-12">
-          
-          {/* COMPANY INFO */}
           <div className="col-span-2">
             <div className="mb-6">
               <Logo size="md" />
             </div>
             <p className="text-sm text-muted-foreground mb-6 max-w-xs">
-              AI-powered vulnerability scanner trusted by developers worldwide. Find and fix security bugs before they become problems.
+              AI-powered vulnerability scanner. Find and fix security bugs before they become problems.
             </p>
             <div className="flex items-center gap-4">
               <a
-                href="https://github.com/yourusername/probcheck"
+                href="https://github.com/forworkuseonly0206-cell/p_robcheck"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-9 h-9 rounded-lg glass-card flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
@@ -74,7 +63,6 @@ export function Footer() {
             </div>
           </div>
 
-          {/* PRODUCT LINKS */}
           <div>
             <h3 className="text-sm font-semibold text-foreground mb-4">Product</h3>
             <ul className="space-y-3">
@@ -91,11 +79,10 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* RESOURCES LINKS */}
           <div>
-            <h3 className="text-sm font-semibold text-foreground mb-4">Resources</h3>
+            <h3 className="text-sm font-semibold text-foreground mb-4">Company</h3>
             <ul className="space-y-3">
-              {footerLinks.resources.map((link) => (
+              {footerLinks.company.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
@@ -108,7 +95,6 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* LEGAL LINKS */}
           <div>
             <h3 className="text-sm font-semibold text-foreground mb-4">Legal</h3>
             <ul className="space-y-3">
@@ -126,11 +112,8 @@ export function Footer() {
           </div>
         </div>
 
-        {/* BOTTOM BAR */}
         <div className="border-t border-white/5 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            © 2025 ProbCheck. All rights reserved.
-          </p>
+          <p className="text-sm text-muted-foreground">© 2025 ProbCheck. All rights reserved.</p>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span>All systems operational</span>
