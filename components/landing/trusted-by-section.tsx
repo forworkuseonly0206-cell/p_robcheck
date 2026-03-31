@@ -32,7 +32,7 @@ export function TrustedBySection() {
           transition={{ duration: 0.6 }}
           className="text-center text-xs tracking-widest text-muted-foreground uppercase mb-10"
         >
-          Used in production by security-conscious teams
+          Used in production by security-conscious team(*Our Aim)
         </motion.p>
 
         {/* Logos / Wordmarks */}
