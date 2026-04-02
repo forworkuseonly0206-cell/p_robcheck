@@ -11,6 +11,7 @@ const footerLinks = {
   ],
   company: [
     { href: "/about", label: "About Us" },
+    { href: "/blog", label: "Blog" },
     { href: "/contact", label: "Contact" },
   ],
   legal: [
@@ -33,17 +34,17 @@ export function Footer() {
               AI-powered vulnerability scanner. Find and fix security bugs before they become problems.
             </p>
             <div className="flex items-center gap-4">
-              <a
-                href="https://github.com/forworkuseonly0206-cell/p_robcheck"
+              {/* <a
+                href=""
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-9 h-9 rounded-lg glass-card flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="GitHub"
               >
                 <Github className="h-4 w-4" />
-              </a>
+              </a> */}
               <a
-                href="https://twitter.com/probcheck"
+                // href="https://twitter.com/probcheck"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-9 h-9 rounded-lg glass-card flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
@@ -52,7 +53,7 @@ export function Footer() {
                 <Twitter className="h-4 w-4" />
               </a>
               <a
-                href="https://linkedin.com/company/probcheck"
+                // href="https://linkedin.com/company/probcheck"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-9 h-9 rounded-lg glass-card flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
