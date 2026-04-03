@@ -1,3 +1,4 @@
+
 User-agent: *
 Allow: /
 
@@ -8,6 +9,7 @@ Disallow: /api/
 Allow: /
 Allow: /pricing
 Allow: /docs
+Allow: /blogs
 
 # Sitemap location
 Sitemap: https://probcheck.in/sitemap.xml
