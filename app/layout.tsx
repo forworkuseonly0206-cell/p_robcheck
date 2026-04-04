@@ -84,7 +84,7 @@ export const metadata: Metadata = {
   },
   
   icons: {
-    icon: "/icon.svg",
+    icon: "/favicon.ico",
   },
   
   alternates: {
