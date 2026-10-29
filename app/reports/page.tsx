@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Search, FileText, Calendar, AlertTriangle, ExternalLink } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { supabase, isSupabaseReady } from '@/lib/supabase'
+import { authFetch } from '@/lib/auth-fetch'
 import { useRouter } from 'next/navigation'
 
 function getSeverityColor(severity: string) {
@@ -38,13 +39,13 @@ export default function ReportsPage() {
   useEffect(() => {
     isMountedRef.current = true
     loadScans()
-    
+
     return () => {
       isMountedRef.current = false
-      console.log('🛑 Reports page unmounted')
     }
   }, [])
 
+  // CHANGED: the server works out who you are from your login token (no user id is sent)
   const loadScans = async () => {
     if (!isSupabaseReady() || !supabase) {
       router.push('/')
@@ -57,22 +58,30 @@ export default function ReportsPage() {
       return
     }
 
-    console.log('📡 Reports page fetching scans')
-    const res = await fetch(`/api/user/scans?userId=${session.user.id}`)
-    const data = await res.json()
-    
-    if (isMountedRef.current && data.scans) {
-      setScans(data.scans)
-      console.log(`✅ Reports page loaded ${data.scans.length} scans`)
-    }
-    
-    if (isMountedRef.current) {
-      setLoading(false)
+    try {
+      const res = await authFetch('/api/user/scans')
+
+      if (res.status === 401) {
+        router.push('/')
+        return
+      }
+
+      const data = res.ok ? await res.json() : null
+
+      if (isMountedRef.current && data?.scans) {
+        setScans(data.scans)
+      }
+    } catch (error) {
+      console.error('❌ Error loading reports:', error)
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 
   const filteredReports = scans.filter((scan) =>
-    scan.scan_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (scan.scan_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
     scan.repository_name?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -177,7 +186,7 @@ export default function ReportsPage() {
                   )}
                   {scan.vulnerabilities_found === 0 && scan.status === 'completed' && (
                     <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">
-                      ✓ No Issues
+                      No issues detected
                     </Badge>
                   )}
                 </div>

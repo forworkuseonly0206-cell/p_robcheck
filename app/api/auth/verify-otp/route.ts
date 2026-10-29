@@ -1,48 +1,44 @@
-// app/api/auth/verify-otp/route.ts - FIXED (ONLY VERIFIES, DOESN'T CREATE)
+// app/api/auth/verify-otp/route.ts  (COMPLETE FILE - replace the old one)
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuthOTP } from '@/lib/auth-email'
+import { makeVerifyToken } from '@/lib/verify-token'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { getClientIp } from '@/lib/auth-server'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, otp, type } = await request.json()
-
-    if (!email || !otp) {
-      return NextResponse.json(
-        { error: 'Email and OTP are required' },
-        { status: 400 }
-      )
+    const ip = getClientIp(request)
+    if (!(await checkRateLimit(`verify:ip:${ip}`, 30, 600))) {
+      return NextResponse.json({ error: 'Too many attempts. Please wait and try again.' }, { status: 429 })
     }
 
-    if (otp.length !== 6) {
-      return NextResponse.json(
-        { error: 'OTP must be exactly 6 digits' },
-        { status: 400 }
-      )
+    const body = await request.json().catch(() => null)
+    const email = String(body?.email || '').trim().toLowerCase()
+    const otp = String(body?.otp || '')
+
+    if (!email || !/^\d{6}$/.test(otp)) {
+      return NextResponse.json({ error: 'Enter the 6-digit code' }, { status: 400 })
     }
 
-    // ✅ ONLY verify the OTP - DON'T create user yet!
     const result = await verifyAuthOTP(email, otp)
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: 'Invalid verification code' },
-        { status: 400 }
-      )
+      // One generic message for every failure, so nothing is revealed to an attacker
+      const message =
+        result.reason === 'locked'
+          ? 'Too many incorrect attempts. Please request a new code.'
+          : 'Invalid or expired verification code'
+      return NextResponse.json({ error: message }, { status: 400 })
     }
 
-    console.log('✅ OTP verified for:', email)
-
-    // Just return success - user will be created in create-account route
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       verified: true,
-      email: email.toLowerCase()
+      email,
+      token: makeVerifyToken(email),
     })
   } catch (error: any) {
     console.error('❌ Verify OTP error:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to verify OTP' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Verification failed. Please try again.' }, { status: 500 })
   }
 }

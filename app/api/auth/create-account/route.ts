@@ -1,95 +1,60 @@
+// app/api/auth/create-account/route.ts  (COMPLETE FILE - replace the old one)
+// Creates the user on the SERVER as already-confirmed (the email was proven by your own OTP).
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { checkVerifyToken } from '@/lib/verify-token'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { getClientIp } from '@/lib/auth-server'
 import { sendWelcomeEmail } from '@/lib/email'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, fullName } = await request.json()
-
-    if (!email || !password || !fullName) {
-      return NextResponse.json(
-        { error: 'Email, password, and name are required' },
-        { status: 400 }
-      )
+    const ip = getClientIp(request)
+    if (!(await checkRateLimit(`create:ip:${ip}`, 10, 3600))) {
+      return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
     }
 
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: 'Password must be at least 8 characters' },
-        { status: 400 }
-      )
+    const body = await request.json().catch(() => null)
+    const email = String(body?.email || '').trim().toLowerCase()
+    const password = String(body?.password || '')
+    const fullName = String(body?.fullName || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 100)
+    const token = String(body?.token || '')
+
+    if (!EMAIL_RE.test(email) || !fullName || !token) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+    if (password.length < 8 || password.length > 72) {
+      return NextResponse.json({ error: 'Password must be between 8 and 72 characters' }, { status: 400 })
+    }
+    if (!checkVerifyToken(token, email)) {
+      return NextResponse.json({ error: 'Email verification expired. Please verify again.' }, { status: 401 })
     }
 
-    const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers()
-    const existingUser = existingAuthUsers.users.find(
-      u => u.email?.toLowerCase() === email.toLowerCase()
-    )
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'User already registered' },
-        { status: 400 }
-      )
-    }
-
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: email.toLowerCase(),
-      password: password,
-      email_confirm: true,
+    const { error } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // already proven by your OTP
+      user_metadata: { full_name: fullName },
     })
 
-    if (authError) {
-      console.error('❌ Error creating auth user:', authError)
+    if (error) {
+      const exists = /already|registered|exists/i.test(error.message)
+      if (!exists) console.error('❌ createUser error:', error.message)
       return NextResponse.json(
-        { error: authError.message || 'Failed to create account' },
-        { status: 500 }
+        { error: exists ? 'An account with this email already exists. Please sign in.' : 'Failed to create account' },
+        { status: exists ? 409 : 400 }
       )
     }
 
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .insert({
-        id: authData.user.id,
-        email: email.toLowerCase(),
-        full_name: fullName,
-        plan_type: 'free',
-        scans_remaining: 1,
-        scans_used: 0,
-      })
+    // The welcome email is sent here, on the server, so no public "send email" endpoint is needed.
+    await sendWelcomeEmail({ userEmail: email, userName: fullName })
 
-    if (profileError) {
-      console.error('❌ Error creating profile:', profileError)
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-      return NextResponse.json(
-        { error: 'Failed to create profile' },
-        { status: 500 }
-      )
-    }
-
-    // Send welcome email
-    try {
-      await sendWelcomeEmail({
-        userEmail: email,
-        userName: fullName
-      })
-      console.log('✅ Welcome email sent to:', email)
-    } catch (emailError) {
-      console.error('⚠️ Failed to send welcome email:', emailError)
-    }
-
-    return NextResponse.json({
-      success: true,
-      user: {
-        id: authData.user.id,
-        email: authData.user.email,
-        fullName: fullName
-      }
-    })
+    // The profiles row is created automatically by the database trigger.
+    return NextResponse.json({ success: true })
   } catch (error: any) {
     console.error('❌ Create account error:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to create account' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create account' }, { status: 500 })
   }
 }

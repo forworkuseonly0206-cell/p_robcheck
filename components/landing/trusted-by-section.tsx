@@ -1,3 +1,4 @@
+// components/landing/trusted-by-section.tsx
 "use client"
 
 import { motion } from "framer-motion"

@@ -1,4 +1,4 @@
-// lib/scan-store.ts - COMPLETELY FIXED VERSION
+// lib/scan-store.ts (COMPLETE FILE - replace the old one)
 import { supabaseAdmin } from "@/lib/supabase"
 
 let lastReport: any = null
@@ -11,27 +11,26 @@ export function getLastReport() {
   return lastReport
 }
 
-// ✅ FIXED: Accept string, handle internally
 export async function createScan(data: {
   user_id: string
   scan_name: string
-  repository_name?: string | null // Allow null
+  repository_name?: string | null
 }) {
   const { data: scan, error } = await supabaseAdmin
     .from("scans")
     .insert({
       user_id: data.user_id,
       scan_name: data.scan_name,
-      repository_name: data.repository_name || null, // Handle null
+      repository_name: data.repository_name || null,
       status: "pending",
       created_at: new Date().toISOString(),
     })
     .select()
     .single()
 
-  if (error) {
+  if (error || !scan) {
     console.error("Failed to create scan:", error)
-    return null
+    throw new Error(`Could not save the scan: ${error?.message || "unknown error"}`)
   }
 
   return scan
@@ -42,10 +41,12 @@ export async function updateScanStatus(
   status: string,
   progress: number
 ) {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("scans")
     .update({ status, scan_progress: progress })
     .eq("id", scanId)
+
+  if (error) console.error("Failed to update scan status:", error)
 }
 
 export async function saveVulnerabilitiesToDB(
@@ -56,10 +57,17 @@ export async function saveVulnerabilitiesToDB(
       severity: string
       title?: string | null
       description: string
+      pocPayload?: string | null
       suggestedFix?: string | null
       snippet?: string | null
       cwe?: string | null
       line?: number | null
+      fix?: {
+        startLine: number
+        endLine: number
+        original: string
+        replacement: string
+      } | null
     }>
   }>
 ) {
@@ -67,15 +75,28 @@ export async function saveVulnerabilitiesToDB(
 
   for (const result of results) {
     for (const finding of result.findings) {
+      // Pack Exploit PoC into description so it saves cleanly in existing Supabase columns
+      const fullDescription = finding.pocPayload
+        ? `${finding.description || "No description provided"}\n\n[POC]: ${finding.pocPayload}`
+        : finding.description || "No description provided"
+
+      // Pack the verified code replacement in backticks so report-findings.tsx extracts it automatically
+      let fullSuggestedFix = finding.suggestedFix || ""
+      if (finding.fix?.replacement && !fullSuggestedFix.includes("```")) {
+        fullSuggestedFix = fullSuggestedFix
+          ? `${fullSuggestedFix}\n\n\`\`\`\n${finding.fix.replacement}\n\`\`\``
+          : `Replace the vulnerable code with:\n\n\`\`\`\n${finding.fix.replacement}\n\`\`\``
+      }
+
       vulnerabilities.push({
         scan_id: scanId,
         title: finding.title || "Security Vulnerability",
         severity: finding.severity.toLowerCase(),
-        description: finding.description || "No description provided",
+        description: fullDescription,
         file_path: result.path || "unknown",
         line_number: finding.line || null,
         code_snippet: finding.snippet || null,
-        suggested_fix: finding.suggestedFix || null,
+        suggested_fix: fullSuggestedFix || null,
         cwe: finding.cwe || null,
         created_at: new Date().toISOString(),
       })
@@ -101,7 +122,6 @@ export async function completeScan(
     scan_duration_seconds?: number
   }
 ) {
-  // Get ALL vulnerabilities for this scan
   const { data: vulnerabilities, error: vulnError } = await supabaseAdmin
     .from("vulnerabilities")
     .select("severity")
@@ -111,14 +131,8 @@ export async function completeScan(
     console.error("Error fetching vulnerabilities for count:", vulnError)
   }
 
-  const counts = {
-    critical: 0,
-    high: 0,
-    medium: 0,
-    low: 0,
-  }
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 }
 
-  // Count vulnerabilities by severity
   if (vulnerabilities && vulnerabilities.length > 0) {
     for (const vuln of vulnerabilities) {
       const severity = (vuln.severity || "").toLowerCase()
@@ -132,7 +146,6 @@ export async function completeScan(
   console.log("📊 Vulnerability counts:", counts)
   console.log("📁 Total vulnerabilities:", vulnerabilities?.length || 0)
 
-  // Update scan with final counts
   const { error: updateError } = await supabaseAdmin
     .from("scans")
     .update({
@@ -158,11 +171,14 @@ export async function completeScan(
 }
 
 export async function failScan(scanId: string, errorMessage: string) {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("scans")
     .update({
       status: "failed",
       error_message: errorMessage,
+      completed_at: new Date().toISOString(),
     })
     .eq("id", scanId)
+
+  if (error) console.error("Failed to mark scan as failed:", error)
 }

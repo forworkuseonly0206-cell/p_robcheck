@@ -1,4 +1,4 @@
-// components/support/SupportContactForm.tsx
+// components/support/SupportContactForm.tsx  (COMPLETE FILE - replace the old one)
 'use client'
 
 import { useState } from 'react'
@@ -9,20 +9,20 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { authFetch } from '@/lib/auth-fetch'
 import { Mail, Send, CheckCircle, AlertCircle, Zap } from 'lucide-react'
 
+// userEmail, userName and userId are still accepted (the parent page passes them),
+// but they are no longer sent. The server finds out who you are from your login.
 interface SupportContactFormProps {
-  userEmail: string
-  userName: string
-  userId: string
+  userEmail?: string
+  userName?: string
+  userId?: string
   hasPrioritySupport: boolean
   planType: string
 }
 
 export function SupportContactForm({
-  userEmail,
-  userName,
-  userId,
   hasPrioritySupport,
   planType
 }: SupportContactFormProps) {
@@ -34,7 +34,7 @@ export function SupportContactForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    
+
     if (!subject.trim() || !message.trim()) {
       setError('Please fill in all fields')
       return
@@ -45,13 +45,10 @@ export function SupportContactForm({
     setSuccess(false)
 
     try {
-      const response = await fetch('/api/support', {
+      const response = await authFetch('/api/support', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
-          userEmail,
-          userName,
           subject,
           message,
           priority: hasPrioritySupport ? 'high' : 'normal'
@@ -59,17 +56,18 @@ export function SupportContactForm({
       })
 
       if (!response.ok) {
-        throw new Error('Failed to send support request')
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error || 'Failed to send support request')
       }
 
       setSuccess(true)
       setSubject('')
       setMessage('')
-      
+
       setTimeout(() => setSuccess(false), 5000)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Support request error:', err)
-      setError('Failed to send support request. Please try again.')
+      setError(err?.message || 'Failed to send support request. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -78,11 +76,11 @@ export function SupportContactForm({
   const getSLAText = () => {
     switch (planType) {
       case 'enterprise':
-        return '4-hour response time'
+        return 'Dedicated support'
       case 'pro':
-        return '24-hour response time'
+        return 'Priority support'
       default:
-        return '48-72 hour response time'
+        return 'Standard support'
     }
   }
 
@@ -95,10 +93,10 @@ export function SupportContactForm({
             Contact Support
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {getSLAText()} • {hasPrioritySupport ? 'Priority' : 'Standard'} support
+            {getSLAText()}
           </p>
         </div>
-        
+
         {hasPrioritySupport && (
           <Badge className="bg-primary/10 text-primary border-primary/30">
             <Zap className="w-3 h-3 mr-1" />
@@ -111,7 +109,7 @@ export function SupportContactForm({
         <Alert className="mb-4 bg-primary/10 border-primary/30">
           <CheckCircle className="w-4 h-4 text-primary" />
           <AlertDescription className="text-primary">
-            Your support request has been sent! We'll respond within {getSLAText()}.
+            Your support request has been sent. We will get back to you by email.
           </AlertDescription>
         </Alert>
       )}
@@ -132,6 +130,7 @@ export function SupportContactForm({
             onChange={(e) => setSubject(e.target.value)}
             placeholder="Brief description of your issue"
             className="mt-2 bg-secondary border-border"
+            maxLength={150}
             disabled={loading}
           />
         </div>
@@ -144,6 +143,7 @@ export function SupportContactForm({
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Provide details about your issue or question..."
             rows={6}
+            maxLength={5000}
             className="mt-2 bg-secondary border-border resize-none"
             disabled={loading}
           />
@@ -156,7 +156,7 @@ export function SupportContactForm({
         >
           {loading ? (
             <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
               Sending...
             </>
           ) : (
@@ -171,7 +171,7 @@ export function SupportContactForm({
       {!hasPrioritySupport && (
         <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
           <p className="text-sm text-muted-foreground">
-            💡 <strong>Upgrade to Pro</strong> for priority support with 24-hour response times
+            <strong>Upgrade to Pro</strong> to have your requests answered first.
           </p>
         </div>
       )}

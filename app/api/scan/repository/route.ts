@@ -1,56 +1,67 @@
-// app/api/scan/repository/route.ts
-import { advancedAnalyzeFiles } from '@/lib/advanced-scanner'
-import { getUserSubscription } from '@/lib/subscription'
+// app/api/scan/repository/route.ts (COMPLETE FILE - replace the old one)
+import { advancedAnalyzeFiles, analyzeFiles } from '@/lib/precise-scanner'
 import { NextRequest, NextResponse } from 'next/server'
-import { canUserScan, decrementScanCount } from '@/lib/subscription'
-import { analyzeFiles } from '@/lib/scanner'
 import { sendScanCompleteEmail } from '@/lib/email'
-import { shouldSendScanEmail } from '@/lib/email-check' // ✨ NEW: Import email check
+import { shouldSendScanEmail } from '@/lib/email-check'
 import {
   createScan,
   updateScanStatus,
   saveVulnerabilitiesToDB,
   completeScan,
   failScan,
-  setLastReport,
 } from '@/lib/scan-store'
+import { consumeScanSlot, refundScanSlot } from '@/lib/scan-limits'
+import { requireUser, getClientIp, HttpError } from '@/lib/auth-server'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { supabaseAdmin } from '@/lib/supabase'
 import { updateUsageStats } from '@/lib/usage-stats'
 import { logAudit } from '@/lib/audit-log'
-import { isValidGitHubUrl, cloneAndScanRepo, cleanupRepo } from '@/lib/repo-scanner'
+import { isValidRepoUrl, cloneAndScanRepo, cleanupRepo } from '@/lib/repo-scanner'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
+const GENERIC_SERVER_ERROR = 'The scan failed because of a server error. Please try again.'
+const GENERIC_SCANNER_ERROR = 'The scanner could not complete this scan. Please try again.'
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now()
-  let scanId: string | null = null
+  let scanId = ''
   let repoPath: string | null = null
+  let userId = ''
+  let slotTaken = false
+  let scanCompleted = false
 
   try {
-    const body = await req.json()
-    const { repositoryUrl, projectName, userId, language } = body
+    userId = await requireUser(req)
 
-    console.log('🔍 Repository scan request:', { repositoryUrl, projectName, language })
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Authentication required. Please sign in to scan.' },
-        { status: 401 }
-      )
+    const ip = getClientIp(req)
+    const okUser = await checkRateLimit(`repo:user:${userId}`, 5, 3600)
+    const okIp = await checkRateLimit(`repo:ip:${ip}`, 15, 3600)
+    if (!okUser || !okIp) {
+      throw new HttpError('Too many scan requests. Please wait a while and try again.', 429)
     }
+
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      throw new HttpError('Invalid request', 400)
+    }
+
+    const repositoryUrl = String(body.repositoryUrl || '').trim()
+    const projectName =
+      String(body.projectName || 'Repository Scan')
+        .replace(/[\u0000-\u001f<>]/g, '')
+        .trim()
+        .slice(0, 100) || 'Repository Scan'
+    const language = String(body.language || 'javascript').slice(0, 100)
 
     if (!repositoryUrl) {
-      return NextResponse.json(
-        { error: 'Repository URL is required' },
-        { status: 400 }
-      )
+      throw new HttpError('Repository URL is required', 400)
     }
-
-    if (!isValidGitHubUrl(repositoryUrl)) {
-      return NextResponse.json(
-        { error: 'Invalid GitHub URL. Please provide a valid GitHub repository URL.' },
-        { status: 400 }
+    if (!isValidRepoUrl(repositoryUrl)) {
+      throw new HttpError(
+        'Invalid repository URL. Use a public https link from GitHub, GitLab or Bitbucket.',
+        400
       )
     }
 
@@ -61,102 +72,79 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!profile) {
-      return NextResponse.json(
-        { error: 'User profile not found' },
-        { status: 404 }
-      )
+      throw new HttpError('User profile not found', 404)
     }
 
-    const scanCheck = await canUserScan(userId)
-    if (!scanCheck.allowed) {
+    const planType = (profile.plan_type || 'free').toLowerCase()
+    const isPro = planType === 'pro' || planType === 'enterprise'
+
+    const allowed = await consumeScanSlot(userId)
+    if (!allowed) {
       return NextResponse.json(
-        {
-          error: scanCheck.reason || 'Scan limit reached',
-          upgrade: true,
-        },
+        { error: "You've used your free scan. Upgrade to Pro for unlimited scans.", upgrade: true },
         { status: 403 }
       )
     }
+    slotTaken = true
 
     const scan = await createScan({
       user_id: userId,
-      scan_name: projectName || 'Repository Scan',
-      repository_name: repositoryUrl,
+      scan_name: projectName,
+      repository_name: repositoryUrl.slice(0, 200),
     })
+    scanId = scan.id
 
-    if (!scan || !scan.id) {
-      throw new Error('Failed to create scan record')
-    }
+    await updateScanStatus(scanId, 'scanning', 10)
 
-    const confirmedScanId: string = scan.id
-    scanId = confirmedScanId
-
-    await updateScanStatus(confirmedScanId, 'scanning', 10)
-
-    console.log('📦 Starting repository clone...')
-    const { files, repoPath: clonedPath } = await cloneAndScanRepo(
-      repositoryUrl,
-      {
-        projectName: projectName || 'Repository Scan',
-        language: language || 'javascript',
-      }
-    )
-
-    repoPath = clonedPath
+    const cloned = await cloneAndScanRepo(repositoryUrl, { projectName, language })
+    repoPath = cloned.repoPath
+    const files = cloned.files
 
     if (files.length === 0) {
-      throw new Error('No supported files found in the repository')
+      throw new HttpError('No supported files were found in this repository.', 400)
     }
 
-    console.log(`📄 Scanning ${files.length} files...`)
-    await updateScanStatus(confirmedScanId, 'scanning', 50)
-
-    const subscription = await getUserSubscription(userId)
-    const isPro = subscription?.planType === 'pro' || subscription?.planType === 'enterprise'
-
-    console.log(`📊 Scanning with ${isPro ? 'ADVANCED' : 'BASIC'} tier`)
+    await updateScanStatus(scanId, 'scanning', 50)
 
     const report = isPro
-      ? await advancedAnalyzeFiles(files, {
-          projectName: projectName || 'Repository Scan',
-          language: language || 'javascript',
-          userId,
-          scanId: confirmedScanId
-        })
-      : await analyzeFiles(files, {
-          projectName: projectName || 'Repository Scan',
-          language: language || 'javascript',
-        })
+      ? await advancedAnalyzeFiles(files, { projectName, language, userId, scanId })
+      : await analyzeFiles(files, { projectName, language })
 
-    await saveVulnerabilitiesToDB(confirmedScanId, report.results || [])
+    if (report.error) {
+      console.error('❌ Scanner error:', report.error)
+      await failScan(scanId, GENERIC_SCANNER_ERROR)
+      await refundScanSlot(userId)
+      slotTaken = false
+      return NextResponse.json({ error: GENERIC_SCANNER_ERROR, scanId }, { status: 400 })
+    }
+
+    const allWarnings = report.warnings || []
+
+    await saveVulnerabilitiesToDB(scanId, report.results || [])
 
     const durationSeconds = Math.round((Date.now() - startTime) / 1000)
 
-    await completeScan(confirmedScanId, {
+    await completeScan(scanId, {
       total_files_scanned: files.length,
       scan_duration_seconds: durationSeconds,
     })
+    scanCompleted = true
 
-    // ✨ NEW: Check user preferences before sending email
-    const shouldSendEmail = await shouldSendScanEmail(userId)
-    
-    if (shouldSendEmail) {
-      try {
+    try {
+      if ((await shouldSendScanEmail(userId)) && profile.email) {
         await sendScanCompleteEmail({
           userEmail: profile.email,
           userName: profile.full_name || undefined,
-          scanId: confirmedScanId,
-          projectName: projectName || 'Repository Scan',
+          scanId,
+          projectName,
           summary: report.summary,
           filesScanned: files.length,
+          warnings: allWarnings,
+          selectedLanguage: language,
         })
-        console.log('✅ Scan completion email sent')
-      } catch (emailError) {
-        console.error('⚠️ Failed to send email, but scan completed:', emailError)
-        // Don't fail the scan if email fails
       }
-    } else {
-      console.log('📧 Email notifications disabled by user')
+    } catch (emailError) {
+      console.error('⚠️ Failed to send email, but scan completed:', emailError)
     }
 
     try {
@@ -164,10 +152,7 @@ export async function POST(req: NextRequest) {
         scans: 1,
         filesScanned: files.length,
         vulnerabilitiesFound:
-          report.summary.critical +
-          report.summary.high +
-          report.summary.medium +
-          report.summary.low,
+          report.summary.critical + report.summary.high + report.summary.medium + report.summary.low,
       })
     } catch (statsError) {
       console.error('Failed to update usage stats:', statsError)
@@ -175,73 +160,45 @@ export async function POST(req: NextRequest) {
 
     try {
       await logAudit({
-        userId: userId,
+        userId,
         action: 'scan_completed',
         resourceType: 'scan',
-        resourceId: confirmedScanId,
-        metadata: {
-          projectName: projectName || 'Repository Scan',
-          language: language || 'javascript',
-          filesScanned: files.length,
-          repositoryUrl,
-          scanType: 'repository',
-        },
+        resourceId: scanId,
+        metadata: { projectName, language, filesScanned: files.length, repositoryUrl, scanType: 'repository' },
       })
     } catch (auditError) {
       console.error('Failed to log audit:', auditError)
     }
 
-    try {
-      await decrementScanCount(userId)
-    } catch (countError) {
-      console.error('Failed to decrement scan count:', countError)
-    }
-
-    if (repoPath) {
-      try {
-        await cleanupRepo(repoPath)
-      } catch (cleanupError) {
-        console.error('Failed to cleanup repo:', cleanupError)
-      }
-    }
-
-    const finalReport = {
-      scanId: confirmedScanId,
-      project: projectName || 'Repository Scan',
+    return NextResponse.json({
+      scanId,
+      project: projectName,
       summary: report.summary,
+      totalEstimatedBountyUsd: report.totalEstimatedBountyUsd || 0,
       results: report.results,
       filesScanned: files.length,
       durationSeconds,
-      language: language || 'javascript',
+      language,
       scanType: 'repository' as const,
       scannerTier: isPro ? 'advanced' : 'basic',
-    }
-
-    setLastReport(finalReport)
-
-    return NextResponse.json(finalReport)
+      warnings: allWarnings,
+    })
   } catch (err: any) {
-    console.error('❌ Repository scan error:', err)
+    const isHttp = err instanceof HttpError
+    if (!isHttp) console.error('❌ Repository scan error:', err)
 
-    if (scanId) {
-      try {
-        await failScan(scanId, String(err?.message || err))
-      } catch (failError) {
-        console.error('Failed to mark scan as failed:', failError)
-      }
+    if (slotTaken && !scanCompleted) {
+      await refundScanSlot(userId)
     }
-
-    if (repoPath) {
-      try {
-        await cleanupRepo(repoPath)
-      } catch (cleanupError) {
-        console.error('Failed to cleanup repo on error:', cleanupError)
-      }
+    if (scanId) {
+      await failScan(scanId, isHttp ? err.message : GENERIC_SERVER_ERROR).catch(() => {})
     }
 
     return NextResponse.json(
-      { error: String(err?.message || err) },
-      { status: 500 }
+      { error: isHttp ? err.message : (err?.message?.startsWith('Could not download') || err?.message?.startsWith('The repository took') ? err.message : GENERIC_SERVER_ERROR) },
+      { status: isHttp ? err.status : 500 }
     )
+  } finally {
+    if (repoPath) await cleanupRepo(repoPath)
   }
 }

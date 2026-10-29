@@ -1,137 +1,109 @@
-// app/api/api-keys/route.ts - API Key Management
+// app/api/api-keys/route.ts  (COMPLETE FILE - replace the old one)
+// Only a HASH of each key is stored. The real key is shown once, when it is created.
 import { NextResponse } from 'next/server'
+import { randomBytes, createHash } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
-import { randomBytes } from 'crypto'
+import { requireUser, HttpError } from '@/lib/auth-server'
+import { checkRateLimit } from '@/lib/rate-limit'
 
-// Generate secure API key
-function generateApiKey(): string {
-  const prefix = 'pk_' // ProbCheck key
-  const randomPart = randomBytes(32).toString('hex')
-  return `${prefix}${randomPart}`
+const MAX_KEYS_PER_USER = 10
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const generateApiKey = () => `pk_${randomBytes(32).toString('hex')}`
+const hashKey = (key: string) => createHash('sha256').update(key).digest('hex')
+
+function fail(error: any, fallback: string) {
+  const isHttp = error instanceof HttpError
+  if (!isHttp) console.error(fallback, error)
+  return NextResponse.json(
+    { error: isHttp ? error.message : fallback },
+    { status: isHttp ? error.status : 500 }
+  )
 }
 
-// GET - List all API keys for user
+// GET - list my keys (the key value itself is never returned)
 export async function GET(req: Request) {
   try {
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const userId = await requireUser(req)
 
-    const token = authHeader.replace('Bearer ', '')
-    
-    // Verify user session
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
-    
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Get user's API keys (hide the actual key value)
     const { data: keys, error } = await supabaseAdmin
       .from('api_keys')
-      .select('id, name, created_at, last_used_at, is_active, expires_at')
-      .eq('user_id', user.id)
+      .select('id, name, key_prefix, created_at, last_used_at, is_active, expires_at')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
     if (error) throw error
-
     return NextResponse.json({ keys })
-  } catch (error: any) {
-    console.error('Error fetching API keys:', error)
-    return NextResponse.json({ error: 'Failed to fetch API keys' }, { status: 500 })
+  } catch (error) {
+    return fail(error, 'Failed to fetch API keys')
   }
 }
 
-// POST - Create new API key
+// POST - create a key
 export async function POST(req: Request) {
   try {
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const userId = await requireUser(req)
+
+    if (!(await checkRateLimit(`apikey:user:${userId}`, 10, 3600))) {
+      throw new HttpError('Too many requests. Please try again later.', 429)
     }
 
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
-    
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const body = await req.json().catch(() => null)
+    const name = String(body?.name || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 50)
+    if (!name) throw new HttpError('API key name is required', 400)
+
+    const { count } = await supabaseAdmin
+      .from('api_keys')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+    if ((count ?? 0) >= MAX_KEYS_PER_USER) {
+      throw new HttpError(`You can have at most ${MAX_KEYS_PER_USER} API keys. Delete one first.`, 400)
     }
 
-    const body = await req.json()
-    const { name } = body
-
-    if (!name || name.trim().length === 0) {
-      return NextResponse.json({ error: 'API key name is required' }, { status: 400 })
-    }
-
-    // Generate new API key
     const apiKey = generateApiKey()
 
-    // Save to database
     const { data: keyData, error } = await supabaseAdmin
       .from('api_keys')
       .insert({
-        user_id: user.id,
-        key: apiKey,
-        name: name.trim(),
+        user_id: userId,
+        name,
+        key_hash: hashKey(apiKey),
+        key_prefix: apiKey.slice(0, 8),
         is_active: true,
       })
-      .select()
+      .select('id, name, created_at, key_prefix')
       .single()
 
     if (error) throw error
 
-    // Return the key ONCE (this is the only time user will see it)
+    // The real key is returned ONCE. We cannot show it again because we do not store it.
     return NextResponse.json({
       success: true,
-      apiKey, // Show the actual key only on creation
-      keyData: {
-        id: keyData.id,
-        name: keyData.name,
-        created_at: keyData.created_at,
-      }
+      apiKey,
+      keyData: { id: keyData.id, name: keyData.name, created_at: keyData.created_at },
     })
-  } catch (error: any) {
-    console.error('Error creating API key:', error)
-    return NextResponse.json({ error: 'Failed to create API key' }, { status: 500 })
+  } catch (error) {
+    return fail(error, 'Failed to create API key')
   }
 }
 
-// DELETE - Revoke API key
+// DELETE - revoke one of my keys
 export async function DELETE(req: Request) {
   try {
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const userId = await requireUser(req)
 
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
-    
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const keyId = new URL(req.url).searchParams.get('id') || ''
+    if (!UUID_RE.test(keyId)) throw new HttpError('API key ID is required', 400)
 
-    const { searchParams } = new URL(req.url)
-    const keyId = searchParams.get('id')
-
-    if (!keyId) {
-      return NextResponse.json({ error: 'API key ID is required' }, { status: 400 })
-    }
-
-    // Delete the API key (verify ownership via RLS)
     const { error } = await supabaseAdmin
       .from('api_keys')
       .delete()
       .eq('id', keyId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId) // you can only delete your own
 
     if (error) throw error
-
     return NextResponse.json({ success: true })
-  } catch (error: any) {
-    console.error('Error deleting API key:', error)
-    return NextResponse.json({ error: 'Failed to delete API key' }, { status: 500 })
+  } catch (error) {
+    return fail(error, 'Failed to delete API key')
   }
 }

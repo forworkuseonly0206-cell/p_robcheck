@@ -1,32 +1,34 @@
-// lib/repo-scanner.ts - WITH GITLAB & BITBUCKET SUPPORT
+// lib/repo-scanner.ts  (COMPLETE FILE - replace the old one)
 import simpleGit from 'simple-git'
 import { promises as fs } from 'fs'
+import os from 'os'
 import path from 'path'
+import crypto from 'crypto'
 
-const TEMP_DIR = path.join(process.cwd(), '.temp-repos')
+// CHANGED: the OS temp folder, not inside the project folder
+const TEMP_DIR = path.join(os.tmpdir(), 'probcheck-repos')
+
+const CLONE_TIMEOUT_MS = 50_000
+const MAX_FILE_BYTES = 500_000
+const MAX_FILES_VISITED = 20_000
+const MAX_DEPTH = 20
+const MAX_FILES_TO_SCAN = 30
+
+const ALLOWED_HOSTS = ['github.com', 'gitlab.com', 'bitbucket.org']
 
 async function ensureTempDir() {
-  try {
-    await fs.mkdir(TEMP_DIR, { recursive: true })
-  } catch (error) {
-    console.error('Failed to create temp directory:', error)
-  }
+  await fs.mkdir(TEMP_DIR, { recursive: true })
 }
 
 async function cleanupOldRepos() {
   try {
-    const files = await fs.readdir(TEMP_DIR)
+    const entries = await fs.readdir(TEMP_DIR)
     const now = Date.now()
-    const ONE_HOUR = 60 * 60 * 1000
-
-    for (const file of files) {
-      const filePath = path.join(TEMP_DIR, file)
-      const stats = await fs.stat(filePath)
-      const age = now - stats.mtimeMs
-
-      if (age > ONE_HOUR) {
-        await fs.rm(filePath, { recursive: true, force: true })
-        console.log(`🗑️ Cleaned up old repo: ${file}`)
+    for (const name of entries) {
+      const p = path.join(TEMP_DIR, name)
+      const stats = await fs.stat(p)
+      if (now - stats.mtimeMs > 60 * 60 * 1000) {
+        await fs.rm(p, { recursive: true, force: true })
       }
     }
   } catch (error) {
@@ -34,122 +36,108 @@ async function cleanupOldRepos() {
   }
 }
 
-// ✅ UPDATED: Validate GitHub, GitLab, and Bitbucket URLs
+// CHANGED: only https links on the three allowed sites, parsed properly (no look-alike hosts,
+// no usernames/ports/query strings, no "..", no ssh links).
 export function isValidRepoUrl(url: string): boolean {
-  const patterns = [
-    // GitHub
-    /^https?:\/\/github\.com\/[\w-]+\/[\w.-]+\/?$/,
-    /^https?:\/\/github\.com\/[\w-]+\/[\w.-]+\.git$/,
-    /^git@github\.com:[\w-]+\/[\w.-]+\.git$/,
-    
-    // GitLab
-    /^https?:\/\/gitlab\.com\/[\w-]+\/[\w.-]+\/?$/,
-    /^https?:\/\/gitlab\.com\/[\w-]+\/[\w.-]+\.git$/,
-    /^git@gitlab\.com:[\w-]+\/[\w.-]+\.git$/,
-    
-    // GitLab with subgroups (e.g., gitlab.com/group/subgroup/project)
-    /^https?:\/\/gitlab\.com\/[\w-]+\/[\w-]+\/[\w.-]+\/?$/,
-    /^https?:\/\/gitlab\.com\/[\w-]+\/[\w-]+\/[\w.-]+\.git$/,
-    
-    // Bitbucket
-    /^https?:\/\/bitbucket\.org\/[\w-]+\/[\w.-]+\/?$/,
-    /^https?:\/\/bitbucket\.org\/[\w-]+\/[\w.-]+\.git$/,
-    /^git@bitbucket\.org:[\w-]+\/[\w.-]+\.git$/,
-  ]
-  return patterns.some(pattern => pattern.test(url))
+  if (typeof url !== 'string' || url.length > 200) return false
+
+  let u: URL
+  try {
+    u = new URL(url.trim())
+  } catch {
+    return false
+  }
+
+  if (u.protocol !== 'https:') return false
+  if (!ALLOWED_HOSTS.includes(u.hostname)) return false
+  if (u.username || u.password || u.port || u.search || u.hash) return false
+
+  const parts = u.pathname.replace(/\/+$/, '').split('/').filter(Boolean)
+  const maxParts = u.hostname === 'gitlab.com' ? 4 : 2 // GitLab allows subgroups
+  if (parts.length < 2 || parts.length > maxParts) return false
+
+  return parts.every(p => /^[\w.-]+$/.test(p) && p !== '.' && p !== '..')
 }
 
-// ✅ BACKWARD COMPATIBILITY: Keep old function name
+// Kept so old imports keep working
 export function isValidGitHubUrl(url: string): boolean {
   return isValidRepoUrl(url)
 }
 
-// ✅ NEW: Detect repository platform
 export function getRepoPlatform(url: string): 'github' | 'gitlab' | 'bitbucket' | 'unknown' {
-  if (url.includes('github.com')) return 'github'
-  if (url.includes('gitlab.com')) return 'gitlab'
-  if (url.includes('bitbucket.org')) return 'bitbucket'
+  try {
+    const host = new URL(url).hostname
+    if (host === 'github.com') return 'github'
+    if (host === 'gitlab.com') return 'gitlab'
+    if (host === 'bitbucket.org') return 'bitbucket'
+  } catch {}
   return 'unknown'
 }
 
-function getRepoName(url: string): string {
-  const match = url.match(/\/([^\/]+?)(\.git)?$/)
-  return match ? match[1] : 'repo'
-}
-
-// ✅ UPDATED: Clone from GitHub, GitLab, or Bitbucket
 export async function cloneAndScanRepo(
   repoUrl: string,
-  options: {
-    projectName: string
-    language: string
-  }
+  options: { projectName: string; language: string }
 ): Promise<{
   files: { path: string; content: string }[]
   totalFiles: number
   repoPath: string
   platform: string
 }> {
+  if (!isValidRepoUrl(repoUrl)) {
+    throw new Error('Invalid repository URL. Supported: GitHub, GitLab, Bitbucket (https links).')
+  }
+
   await ensureTempDir()
   await cleanupOldRepos()
 
-  // Validate URL
-  if (!isValidRepoUrl(repoUrl)) {
-    throw new Error('Invalid repository URL. Supported platforms: GitHub, GitLab, Bitbucket')
-  }
+  // Normalised URL built from the parsed pieces
+  const u = new URL(repoUrl.trim())
+  const cleanUrl = `${u.origin}${u.pathname.replace(/\/+$/, '')}`
 
-  const platform = getRepoPlatform(repoUrl)
-  const repoName = getRepoName(repoUrl)
-  const timestamp = Date.now()
-  const repoPath = path.join(TEMP_DIR, `${repoName}-${timestamp}`)
+  const platform = getRepoPlatform(cleanUrl)
+  const repoPath = path.join(TEMP_DIR, crypto.randomUUID()) // random name, never from user input
 
-  console.log(`📦 Cloning ${platform} repository:`, repoUrl)
-  console.log('📁 Clone path:', repoPath)
+  // Stop a slow or huge clone after 50 seconds
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), CLONE_TIMEOUT_MS)
 
   try {
-    const git = simpleGit()
-    
-    // Clone the repository (shallow clone for speed)
-    // Works for GitHub, GitLab, and Bitbucket
-    await git.clone(repoUrl, repoPath, ['--depth', '1'])
-    
-    console.log(`✅ ${platform} repository cloned successfully`)
+    const git = simpleGit({
+      abort: controller.signal,
+      // Do not create symbolic links from the repo (a malicious repo could point one at
+      // a file on YOUR server, such as your secret keys)
+      config: ['core.symlinks=false'],
+    }).env({ ...process.env, GIT_TERMINAL_PROMPT: '0' }) // never wait for a password
+
+    await git.clone(cleanUrl, repoPath, ['--depth', '1', '--single-branch', '--no-tags'])
 
     const files = await readRepoFiles(repoPath, options.language)
-    
-    console.log(`📄 Found ${files.length} files to scan`)
 
     return {
       files,
       totalFiles: files.length,
       repoPath,
-      platform: platform.charAt(0).toUpperCase() + platform.slice(1) // Capitalize
+      platform: platform.charAt(0).toUpperCase() + platform.slice(1),
     }
   } catch (error: any) {
     console.error(`❌ Clone error for ${platform}:`, error)
-    
-    // Clean up on error
-    try {
-      await fs.rm(repoPath, { recursive: true, force: true })
-    } catch {}
+    await fs.rm(repoPath, { recursive: true, force: true }).catch(() => {})
 
-    // Provide helpful error messages
-    if (error.message.includes('authentication') || error.message.includes('Permission denied')) {
-      throw new Error(`Authentication failed. Please ensure the repository is public or provide valid credentials.`)
+    if (controller.signal.aborted) {
+      throw new Error('The repository took too long to download. Try a smaller repository.')
     }
-    
-    if (error.message.includes('not found') || error.message.includes('does not exist')) {
-      throw new Error(`Repository not found. Please check the URL and ensure the repository exists.`)
-    }
-
-    throw new Error(`Failed to clone ${platform} repository: ${error.message}`)
+    // Safe messages only; the real error stays in the server log
+    throw new Error('Could not download this repository. Make sure it exists and is public.')
+  } finally {
+    clearTimeout(timer)
   }
 }
 
 export async function cleanupRepo(repoPath: string) {
   try {
+    // Only ever delete inside our own temp folder
+    if (!path.resolve(repoPath).startsWith(path.resolve(TEMP_DIR) + path.sep)) return
     await fs.rm(repoPath, { recursive: true, force: true })
-    console.log('🗑️ Cleaned up repository:', repoPath)
   } catch (error) {
     console.error('Cleanup error:', error)
   }
@@ -160,29 +148,10 @@ async function readRepoFiles(
   language: string
 ): Promise<{ path: string; content: string }[]> {
   const SKIP_DIRS = [
-    'node_modules',
-    '.git',
-    '.next',
-    'dist',
-    'build',
-    'out',
-    'coverage',
-    'vendor',
-    '__pycache__',
-    '.venv',
-    'venv',
-    '.idea',
-    '.vscode',
+    'node_modules', '.git', '.next', 'dist', 'build', 'out', 'coverage',
+    'vendor', '__pycache__', '.venv', 'venv', '.idea', '.vscode',
   ]
-
-  const SKIP_FILES = [
-    '.min.js',
-    '.min.css',
-    '.map',
-    '.lock',
-    'package-lock.json',
-    'yarn.lock',
-  ]
+  const SKIP_FILES = ['.min.js', '.min.css', '.map', '.lock', 'package-lock.json', 'yarn.lock']
 
   const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
     javascript: ['.js', '.jsx', '.mjs', '.cjs'],
@@ -198,65 +167,62 @@ async function readRepoFiles(
   }
 
   let allowedExtensions: string[] = []
-  
   if (language === 'all' || !language) {
     allowedExtensions = Object.values(LANGUAGE_EXTENSIONS).flat()
   } else {
-    const selectedLanguages = language.split(',').map(l => l.trim().toLowerCase())
-    
-    for (const lang of selectedLanguages) {
-      const extensions = LANGUAGE_EXTENSIONS[lang]
-      if (extensions) {
-        allowedExtensions.push(...extensions)
-      }
+    for (const lang of language.split(',').map(l => l.trim().toLowerCase())) {
+      if (LANGUAGE_EXTENSIONS[lang]) allowedExtensions.push(...LANGUAGE_EXTENSIONS[lang])
     }
-    
     if (allowedExtensions.length === 0) {
-      console.warn(`⚠️ Unknown language(s): ${language}, scanning all files`)
       allowedExtensions = Object.values(LANGUAGE_EXTENSIONS).flat()
     }
   }
 
-  console.log(`🎯 Scanning for extensions: ${allowedExtensions.join(', ')}`)
-
+  const realRoot = await fs.realpath(repoPath)
   const files: { path: string; content: string }[] = []
+  let visited = 0
 
-  async function walk(dir: string, baseDir: string = repoPath) {
+  async function walk(dir: string, depth: number) {
+    if (depth > MAX_DEPTH || files.length >= MAX_FILES_TO_SCAN) return
     const entries = await fs.readdir(dir, { withFileTypes: true })
 
     for (const entry of entries) {
+      if (files.length >= MAX_FILES_TO_SCAN) return
+      if (++visited > MAX_FILES_VISITED) return
+
+      // Never follow symbolic links
+      if (entry.isSymbolicLink()) continue
+
       const fullPath = path.join(dir, entry.name)
-      const relativePath = path.relative(baseDir, fullPath)
 
       if (entry.isDirectory()) {
         if (SKIP_DIRS.includes(entry.name)) continue
-        await walk(fullPath, baseDir)
+        await walk(fullPath, depth + 1)
         continue
       }
 
+      const relativePath = path.relative(repoPath, fullPath)
       const lowerPath = relativePath.toLowerCase()
       if (SKIP_FILES.some(skip => lowerPath.endsWith(skip))) continue
       if (!allowedExtensions.some(ext => lowerPath.endsWith(ext))) continue
 
       try {
-        const content = await fs.readFile(fullPath, 'utf-8')
-        
-        if (content.trim().length < 20) continue
-        if (content.length > 500000) continue
+        // Double check: a real file, not too big, and really inside the repo folder
+        const st = await fs.lstat(fullPath)
+        if (!st.isFile() || st.size > MAX_FILE_BYTES) continue
+        const real = await fs.realpath(fullPath)
+        if (!real.startsWith(realRoot + path.sep)) continue
 
-        files.push({
-          path: relativePath,
-          content,
-        })
+        const content = await fs.readFile(fullPath, 'utf-8')
+        if (content.trim().length < 20) continue
+
+        files.push({ path: relativePath.slice(0, 300), content })
       } catch (error) {
         console.error(`Failed to read ${relativePath}:`, error)
       }
     }
   }
 
-  await walk(repoPath)
-  
-  console.log(`📊 Found ${files.length} files matching selected languages`)
-  
-  return files.slice(0, 30)
+  await walk(repoPath, 0)
+  return files
 }

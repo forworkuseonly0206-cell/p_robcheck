@@ -625,3 +625,61 @@
 .brand-wordmark.mckinsey {
   letter-spacing: 0.02em;
 }
+
+/* PASTE AT THE VERY END of app/globals.css. Overrides the old emerald/purple theme. */
+:root, .dark {
+  --background:#050a04; --foreground:#eaf5e4; --card:#0a1308; --card-foreground:#eaf5e4;
+  --popover:#0a1308; --popover-foreground:#eaf5e4; --primary:#7be83a; --primary-foreground:#050a04;
+  --secondary:#12200e; --secondary-foreground:#eaf5e4; --muted:#12200e; --muted-foreground:#8fa88a;
+  --accent:#a6f25c; --accent-foreground:#050a04; --border:#1d3317; --input:#1d3317; --ring:#7be83a;
+  --sidebar:#070d06; --sidebar-primary:#7be83a; --sidebar-primary-foreground:#050a04;
+  --sidebar-accent:#12200e; --sidebar-border:#1d3317; --sidebar-ring:#7be83a;
+  --emerald:#7be83a; --emerald-light:#a6f25c; --cyan:#a6f25c; --purple:#3f9a22;
+  --surface:#0a1308; --surface-elevated:#12200e;
+}
+@theme inline { --font-sans: var(--font-grotesk), system-ui, sans-serif; --font-mono: var(--font-jetbrains), monospace; }
+h1, h2, h3 { font-weight: 700; letter-spacing: -0.045em; line-height: 1.04; }
+h1 { font-weight: 800; }
+
+/* film grain over the whole site */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: .22; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -.2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+/* halftone dots: put on any panel (add position:relative) */
+.halftone::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: .55;
+  background-image: radial-gradient(circle, #000 1px, transparent 1.4px); background-size: 4px 4px;
+}
+/* flatten old glass/glow styles to match the flatter look */
+.glass, .glass-card { background: var(--card); backdrop-filter: none; -webkit-backdrop-filter: none; border: 1px solid var(--border); box-shadow: none; }
+.glow-sm, .glow-md, .glow-lg { box-shadow: none; }
+.text-gradient, .heading-premium { background: none; -webkit-text-fill-color: currentColor; color: var(--primary); animation: none; }
+.grid-pattern { background-image: linear-gradient(rgba(123,232,58,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(123,232,58,.05) 1px, transparent 1px); }
+.mono-label { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-foreground); }
+
+/* APPEND to the very end of app/globals.css (after theme-append.css). Fixes cramped headlines. */
+h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.12; word-spacing: 0.12em; }
+h1 { font-weight: 700; }
+
+/* APPEND to the END of app/globals.css (after the other two). Switches to the spade.com light palette. */
+:root, .dark {
+  --background:#ffffff; --foreground:#101a0a; --card:#ffffff; --card-foreground:#101a0a;
+  --popover:#ffffff; --popover-foreground:#101a0a; --primary:#1e2d10; --primary-foreground:#c8f56a;
+  --secondary:#f1f8e6; --secondary-foreground:#101a0a; --muted:#f1f8e6; --muted-foreground:#5a6a4c;
+  --accent:#c8f56a; --accent-foreground:#1e2d10; --border:#dde7d0; --input:#dde7d0; --ring:#1e2d10;
+  --sidebar:#f7fbef; --sidebar-primary:#1e2d10; --sidebar-primary-foreground:#c8f56a;
+  --sidebar-accent:#f1f8e6; --sidebar-border:#dde7d0; --sidebar-ring:#1e2d10;
+  --emerald:#1e2d10; --emerald-light:#c8f56a; --cyan:#c8f56a; --purple:#5a6a4c;
+  --surface:#f1f8e6; --surface-elevated:#ffffff;
+}
+body { background: #fff; }
+body::before { opacity: .08; }
+h1, h2, h3 { font-weight: 600; letter-spacing: -0.025em; }
+.mono-label { color: #5a6a4c; }
+.glass, .glass-card { background: rgba(255,255,255,.85); backdrop-filter: blur(10px); }
+.grid-pattern { background-image: linear-gradient(rgba(30,45,16,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(30,45,16,.06) 1px, transparent 1px); }
+/* temporary shim: old dark-theme utility classes in header/footer/other pages */
+[class*="border-white"] { border-color: var(--border) !important; }
+[class*="bg-white/5"], [class*="hover:bg-white/5"]:hover { background-color: rgba(30,45,16,.05) !important; }
+.bg-black\/20, .bg-black\/10, .bg-black\/30 { background-color: #f1f8e6 !important; }

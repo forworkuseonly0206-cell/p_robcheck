@@ -1,8 +1,7 @@
-// app/scan/page.tsx
+// app/scan/page.tsx  (COMPLETE FILE - replace the old one)
 "use client"
 
 import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { ScanForm } from "@/components/scan/scan-form"
 import { ScanTerminal } from "@/components/scan/scan-terminal"
@@ -66,11 +65,21 @@ export default function ScanPage() {
   }
 
   const handleStartScan = async (formData: FormData, scanType: 'upload' | 'repository') => {
-    if (!user) {
+    if (!user || !supabase) {
       setScanError("Please sign in to start scanning")
       setShowAuthDialog(true)
       return
     }
+
+    // Get the login token. The server uses it to know who you are (it does not trust a userId from here).
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) {
+      setScanError("Your session has expired. Please sign in again.")
+      setShowAuthDialog(true)
+      return
+    }
+    const authHeader = { Authorization: `Bearer ${token}` }
 
     if (
       !isDev &&
@@ -78,7 +87,7 @@ export default function ScanPage() {
       profile?.scans_remaining <= 0
     ) {
       setScanError(
-        "You've used your free scan for this month. Upgrade to Pro for unlimited scans."
+        "You've used your free scan. Upgrade to Pro for unlimited scans."
       )
       return
     }
@@ -90,10 +99,6 @@ export default function ScanPage() {
     setScanError(null)
 
     try {
-      formData.append("userId", user.id)
-
-      const endpoint = scanType === 'repository' ? '/api/scan/repository' : '/api/scan'
-      
       let response: Response
 
       if (scanType === 'repository') {
@@ -101,21 +106,23 @@ export default function ScanPage() {
         const projectName = formData.get('projectName') as string
         const language = formData.get('language') as string
 
-        response = await fetch(endpoint, {
+        response = await fetch('/api/scan/repository', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json', ...authHeader },
           body: JSON.stringify({
             repositoryUrl,
             projectName,
-            userId: user.id,
             language,
+            // TEMPORARY: the repository route still reads userId from here.
+            // Remove this line once that route is updated to use the token.
+            userId: user.id,
           }),
         })
       } else {
-        response = await fetch(endpoint, {
+        // Do NOT set Content-Type for file uploads; the browser sets it correctly
+        response = await fetch('/api/scan', {
           method: "POST",
+          headers: authHeader,
           body: formData,
         })
       }
@@ -125,14 +132,9 @@ export default function ScanPage() {
 
         if (response.status === 401) {
           setShowAuthDialog(true)
-          throw new Error("Authentication required")
         }
 
-        if (response.status === 403) {
-          throw new Error(payload?.error || "Scan limit reached")
-        }
-
-        throw new Error(payload?.error || "Scan failed")
+        throw new Error(payload?.error || "Scan failed. Please try again.")
       }
 
       const report = await response.json()
@@ -142,18 +144,15 @@ export default function ScanPage() {
       setLastReport(report)
       setScanComplete(true)
 
-      if (user) {
-        loadProfile(user.id)
-      }
+      loadProfile(user.id)
     } catch (error) {
       console.error('Scan error:', error)
-      setScanError(String(error))
-      setScanComplete(true)
-      setLastReport({
-        error: String(error),
-        summary: { critical: 0, high: 0, medium: 0, low: 0 },
-        results: [],
-      })
+      // Show the error and keep the form so the user can try again.
+      // (No fake "report" is created, so a failed scan can never look like a clean one.)
+      setScanError(error instanceof Error ? error.message : "Scan failed. Please try again.")
+      setScanComplete(false)
+      setLastReport(null)
+      if (user) loadProfile(user.id)
     } finally {
       setIsScanning(false)
     }

@@ -1,3 +1,4 @@
+// app/reports/[id]/page.tsx  (COMPLETE FILE - replace the old one)
 "use client"
 
 import { useEffect, useState, use } from "react"
@@ -8,6 +9,7 @@ import { ReportHeader } from "@/components/reports/report-header"
 import { ReportOverview } from "@/components/reports/report-overview"
 import { ReportFindings } from "@/components/reports/report-findings"
 import { ReportAttackStory } from "@/components/reports/report-attack-story"
+import { authFetch } from "@/lib/auth-fetch"
 import { LayoutDashboard, Search, GitBranch } from "lucide-react"
 
 interface CompatibleFinding {
@@ -59,7 +61,8 @@ export default function ReportDetailPage({ params }: ReportDetailPageProps) {
 
   const loadReport = async () => {
     try {
-      const res = await fetch(`/api/reports/${id}`)
+      // CHANGED: authFetch sends your login token, so the server can check the report is yours
+      const res = await authFetch(`/api/reports/${id}`)
       if (!res.ok) {
         setLoading(false)
         return
@@ -83,7 +86,6 @@ export default function ReportDetailPage({ params }: ReportDetailPageProps) {
           low: scan.low_count || 0,
         },
 
-        // ✅ FIX: Map database fields to component fields correctly
         findings: (vulnerabilities || []).map((v: any) => ({
           id: v.id,
           title: v.title || "Untitled Vulnerability",
@@ -159,8 +161,7 @@ export default function ReportDetailPage({ params }: ReportDetailPageProps) {
             </TabsContent>
 
             <TabsContent value="findings">
-              {/* ✅ FIX: Pass the correct structure to ReportFindings */}
-              <ReportFindings 
+              <ReportFindings
                 findings={(report.findings || []).map(f => ({
                   severity: f.severity,
                   title: f.title,
@@ -168,7 +169,7 @@ export default function ReportDetailPage({ params }: ReportDetailPageProps) {
                   file_path: f.file,
                   code_snippet: f.codeSnippet,
                   suggested_fix: f.suggestedFix?.description,
-                  cwe: f.cwe || undefined, // ✅ Convert null to undefined
+                  cwe: f.cwe || undefined,
                   line_number: f.line,
                 }))}
               />

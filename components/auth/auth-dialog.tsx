@@ -1,4 +1,4 @@
-// components/auth/auth-dialog.tsx
+// components/auth/auth-dialog.tsx  (COMPLETE FILE - replace the whole old file with this)
 'use client'
 
 import { useState } from 'react'
@@ -32,6 +32,7 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
   const [otp, setOtp] = useState('')
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
+  const [verifyToken, setVerifyToken] = useState('') // proof from the server that the OTP was correct
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,20 +43,16 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     setOtp('')
     setFullName('')
     setPassword('')
+    setVerifyToken('')
     setShowPassword(false)
     setError(null)
     setSuccess(null)
     setStep('email')
   }
 
-  // Sign Up Flow: Email → OTP → Name → Password
-  const handleSignUpEmail = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!isSupabaseReady() || !supabase) {
-      setError('Authentication service is not configured')
-      return
-    }
-
+  // SIGN UP, step 1: email -> server sends a 6-digit code
+  const handleSignUpEmail = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     setLoading(true)
     setError(null)
     setSuccess(null)
@@ -63,35 +60,18 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     try {
       if (!email) {
         setError('Email is required')
-        setLoading(false)
         return
       }
 
-      // Check if user already exists
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .single()
-
-      if (existingUser) {
-        setError('An account with this email already exists. Please sign in.')
-        setLoading(false)
-        return
-      }
-
-      // Generate and send OTP via API route
       const response = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, type: 'signup' }),
       })
-
       const data = await response.json()
 
       if (!response.ok) {
         setError(data.error || 'Failed to send OTP')
-        setLoading(false)
         return
       }
 
@@ -104,13 +84,8 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     }
   }
 
-  // Verify OTP for signup
+  // SIGN UP, step 2: check the code. The server gives back a token as proof.
   const handleVerifySignUpOTP = async () => {
-    if (!isSupabaseReady() || !supabase) {
-      setError('Authentication service is not configured')
-      return
-    }
-
     if (otp.length !== 6) {
       setError('Please enter the 6-digit code')
       return
@@ -120,22 +95,19 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     setError(null)
 
     try {
-      // Verify OTP via API route
       const response = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp, type: 'signup' }),
       })
-
       const data = await response.json()
 
       if (!response.ok) {
         setError(data.error || 'Invalid or expired code')
-        setLoading(false)
         return
       }
 
-      // OTP verified, move to name entry
+      setVerifyToken(data.token) // needed in the last step
       setStep('signup-details')
       setSuccess('Email verified! Please complete your profile.')
     } catch (err: any) {
@@ -145,7 +117,7 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     }
   }
 
-  // Handle name entry
+  // SIGN UP, step 3: name
   const handleSignupDetails = () => {
     if (!fullName.trim()) {
       setError('Please enter your name')
@@ -156,7 +128,7 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     setStep('password')
   }
 
-  // Complete signup with password
+  // SIGN UP, step 4: password -> server creates the account -> we log the user in
   const handleCompleteSignup = async () => {
     if (!isSupabaseReady() || !supabase) {
       setError('Authentication service is not configured')
@@ -172,62 +144,38 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     setError(null)
 
     try {
-      // Create user with password
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-          emailRedirectTo: undefined, // Disable email confirmation link
-        },
+      // 1. The server creates the confirmed account (it checks the OTP token first)
+      const res = await fetch('/api/auth/create-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName, token: verifyToken }),
       })
+      const result = await res.json()
 
-      if (signUpError) {
-        setError(signUpError.message)
-        setLoading(false)
+      if (!res.ok) {
+        setError(result.error || 'Failed to create account')
         return
       }
 
-      if (data.user) {
-        // Create profile
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: data.user.id,
-            email: data.user.email,
-            full_name: fullName,
-            plan_type: 'free',
-            scans_remaining: 1,
-            scans_used: 0,
-          })
+      // 2. Log the browser in, so the header can see the session
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-        if (profileError) {
-          console.error('Profile creation error:', profileError)
-        }
-
-        // Send welcome email
-        try {
-          await fetch('/api/email/welcome', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: data.user.email,
-              name: fullName,
-            }),
-          })
-        } catch (emailError) {
-          console.error('Failed to send welcome email:', emailError)
-        }
-
-        setSuccess('✅ Account created! Redirecting...')
-        
-        setTimeout(() => {
-          onOpenChange(false)
-          window.location.reload()
-        }, 1000)
+      if (signInError) {
+        setError(signInError.message)
+        return
       }
+
+      // (The welcome email is now sent by the server when the account is created.)
+
+      setSuccess('✅ Account created! Redirecting...')
+
+      setTimeout(() => {
+        onOpenChange(false)
+        window.location.reload()
+      }, 1000)
     } catch (err: any) {
       setError(err.message || 'An error occurred')
     } finally {
@@ -235,7 +183,7 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     }
   }
 
-  // Sign In Flow: Email → Password
+  // SIGN IN: email + password
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isSupabaseReady() || !supabase) {
@@ -250,7 +198,6 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
     try {
       if (!email || !password) {
         setError('Email and password are required')
-        setLoading(false)
         return
       }
 
@@ -260,14 +207,18 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
       })
 
       if (signInError) {
-        setError('Invalid email or password')
-        setLoading(false)
+        // Show the real reason when it is not just a wrong password
+        setError(
+          /not confirmed/i.test(signInError.message)
+            ? 'Your email is not confirmed yet. Please contact support.'
+            : 'Invalid email or password'
+        )
         return
       }
 
       if (data.user) {
         setSuccess('✅ Success! Redirecting...')
-        
+
         setTimeout(() => {
           onOpenChange(false)
           window.location.reload()
@@ -357,7 +308,7 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
             </Button>
 
             <div className="text-center text-sm">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <button
                 type="button"
                 onClick={switchMode}
@@ -467,9 +418,9 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
               </Alert>
             )}
 
-            <Button 
-              onClick={handleVerifySignUpOTP} 
-              className="w-full" 
+            <Button
+              onClick={handleVerifySignUpOTP}
+              className="w-full"
               disabled={loading || otp.length !== 6}
             >
               {loading ? 'Verifying...' : 'Verify Code'}
@@ -478,7 +429,7 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
             <div className="text-center">
               <button
                 type="button"
-                onClick={handleSignUpEmail}
+                onClick={() => handleSignUpEmail()}
                 className="text-sm text-primary hover:underline"
                 disabled={loading}
               >
@@ -583,9 +534,9 @@ export function AuthDialog({ open, onOpenChange, mode = 'signin' }: AuthDialogPr
               </Alert>
             )}
 
-            <Button 
-              onClick={handleCompleteSignup} 
-              className="w-full" 
+            <Button
+              onClick={handleCompleteSignup}
+              className="w-full"
               disabled={loading || password.length < 8}
             >
               {loading ? 'Creating account...' : 'Create Account'}

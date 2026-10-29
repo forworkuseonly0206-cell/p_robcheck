@@ -1,9 +1,8 @@
-// components/common/upgrade-modal.tsx
+// components/common/upgrade-modal.tsx  (COMPLETE FILE - replace the old one)
 "use client"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Check, Zap, ArrowRight } from "lucide-react"
 import Link from "next/link"
 
@@ -23,27 +22,17 @@ export function UpgradeModal({ open, onOpenChange, reason }: UpgradeModalProps) 
             <DialogTitle>Upgrade to Pro</DialogTitle>
           </div>
           <DialogDescription>
-            {reason || "Unlock unlimited scans and advanced features"}
+            {reason || "Unlock unlimited scans and the advanced scanner"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-            <div className="flex items-baseline gap-1 mb-2">
-              <span className="text-4xl font-bold">$29</span>
-              <span className="text-muted-foreground">/month</span>
-            </div>
-            <Badge className="bg-primary/20 text-primary">Coming Soon</Badge>
-          </div>
-
           <div className="space-y-3">
             {[
               "Unlimited security scans",
-              "Advanced AI detection",
-              "Team collaboration (5 seats)",
-              "CI/CD pipeline integration",
-              "Priority support",
+              "Advanced AI scanner",
               "Detailed reports with fixes",
+              "Priority support",
             ].map((feature) => (
               <div key={feature} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -54,9 +43,9 @@ export function UpgradeModal({ open, onOpenChange, reason }: UpgradeModalProps) 
             ))}
           </div>
 
-          <Link href="/pricing">
+          <Link href="/pricing" onClick={() => onOpenChange(false)}>
             <Button className="w-full">
-              View All Plans
+              See plans and prices
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>

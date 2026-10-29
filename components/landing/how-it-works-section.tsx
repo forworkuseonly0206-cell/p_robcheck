@@ -1,3 +1,4 @@
+// components/landing/how-it-works-section.tsx
 "use client"
 
 import { motion, useInView } from "framer-motion"
@@ -13,9 +14,9 @@ const steps = [
   },
   {
     icon: Scan,
-    title: "Automated security analysis",
+    title: "Source Code Security Assessment",
     description:
-      "ProbCheck analyzes your code using static analysis and AI models trained on real-world vulnerabilities and exploit patterns.",
+      "Assess your codebase for security weaknesses, unsafe implementation patterns, and potential vulnerabilities with structured analysis and detailed findings designed to support remediation.",
   },
   {
     icon: FileCheck,

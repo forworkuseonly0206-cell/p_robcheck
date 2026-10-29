@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx
+// app/dashboard/page.tsx  (COMPLETE FILE - replace the old one)
 "use client"
 
 import { useState, useEffect, useRef } from 'react'
@@ -9,6 +9,7 @@ import { TrendChart } from "@/components/dashboard/trend-chart"
 import { RecentScansTable } from "@/components/dashboard/recent-scans-table"
 import { QuickActions } from "@/components/dashboard/quick-actions"
 import { supabase, isSupabaseReady } from '@/lib/supabase'
+import { authFetch } from '@/lib/auth-fetch'
 import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -35,65 +36,48 @@ export default function DashboardPage() {
   const [scans, setScans] = useState<Scan[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  
-  // ✅ Use refs to prevent multiple intervals
+
+  // Refs prevent multiple polling intervals
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isMountedRef = useRef(true)
   const isPollingRef = useRef(false)
 
-  // ✅ Initial load only
   useEffect(() => {
-    console.log('🚀 Dashboard mounted')
     isMountedRef.current = true
     checkAuth()
-    
+
     return () => {
-      console.log('💀 Dashboard unmounting - cleaning up')
       isMountedRef.current = false
       isPollingRef.current = false
-      
+
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
-        console.log('🛑 Interval cleared on unmount')
       }
     }
-  }, []) // ✅ EMPTY DEPENDENCY - only run once
+  }, [])
 
-  // ✅ Separate effect for polling management
+  // Poll for updates only while a scan is running
   useEffect(() => {
-    if (!user?.id) {
-      console.log('⏸️ No user, skipping polling setup')
-      return
-    }
+    if (!user?.id) return
 
-    // Count active scans
     const activeCount = scans.filter(s => s.status === "scanning" || s.status === "pending").length
     const shouldPoll = activeCount > 0
 
-    console.log(`📊 Active scans: ${activeCount}, Should poll: ${shouldPoll}, Currently polling: ${isPollingRef.current}`)
-
-    // Clear existing interval if state changed
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
       isPollingRef.current = false
-      console.log('🔄 Cleared existing interval')
     }
 
-    // Start new interval only if needed
     if (shouldPoll && !isPollingRef.current) {
-      console.log(`✅ Starting polling for ${activeCount} active scans`)
       isPollingRef.current = true
-      
+
       intervalRef.current = setInterval(() => {
         if (isMountedRef.current && user?.id) {
-          console.log('⏰ Polling tick - fetching scans')
-          loadScans(user.id)
+          loadScans()
         }
       }, 10000)
-    } else if (!shouldPoll) {
-      console.log('⏹️ No active scans - polling stopped')
     }
 
     return () => {
@@ -101,7 +85,6 @@ export default function DashboardPage() {
         clearInterval(intervalRef.current)
         intervalRef.current = null
         isPollingRef.current = false
-        console.log('🧹 Polling cleanup')
       }
     }
   }, [user?.id, scans.length, scans.filter(s => s.status === "scanning" || s.status === "pending").length])
@@ -120,16 +103,15 @@ export default function DashboardPage() {
       return
     }
 
-    console.log('✅ User authenticated:', session.user.id)
     setUser(session.user)
     await loadProfile(session.user.id)
-    await loadScans(session.user.id)
+    await loadScans()
     setLoading(false)
   }
 
   const loadProfile = async (userId: string) => {
     if (!isMountedRef.current) return
-    
+
     const { data } = await supabase
       .from('profiles')
       .select('*')
@@ -141,27 +123,29 @@ export default function DashboardPage() {
     }
   }
 
-  const loadScans = async (userId: string) => {
+  // CHANGED: no user id is sent. The server works out who you are from your login token.
+  const loadScans = async () => {
     if (!isMountedRef.current) return
-    
+
     try {
-      console.log('📡 Fetching scans for:', userId)
-      const response = await fetch(`/api/user/scans?userId=${userId}`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-        }
+      const response = await authFetch('/api/user/scans', {
+        headers: { 'Cache-Control': 'no-cache' },
       })
-      
+
+      if (response.status === 401) {
+        router.push('/')
+        return
+      }
+
       if (!response.ok) {
         console.error('❌ Scan fetch failed:', response.status)
         return
       }
-      
+
       const data = await response.json()
 
       if (data.scans && isMountedRef.current) {
         setScans(data.scans)
-        console.log(`✅ Loaded ${data.scans.length} scans, ${data.scans.filter((s: Scan) => s.status === "scanning" || s.status === "pending").length} active`)
       }
     } catch (error) {
       console.error('❌ Error loading scans:', error)
@@ -171,9 +155,8 @@ export default function DashboardPage() {
   const handleRefresh = async () => {
     if (!user) return
 
-    console.log('🔄 Manual refresh triggered')
     setRefreshing(true)
-    await loadScans(user.id)
+    await loadScans()
     await loadProfile(user.id)
     setRefreshing(false)
   }

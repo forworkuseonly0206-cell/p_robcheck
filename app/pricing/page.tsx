@@ -1,6 +1,7 @@
-// app/pricing/page.tsx
+// app/pricing/page.tsx  (COMPLETE FILE - replace the old one)
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { Header } from "@/components/layout/header"
@@ -8,190 +9,169 @@ import { Footer } from "@/components/layout/footer"
 import { BackgroundGrid } from "@/components/layout/background-grid"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { CheckoutButton } from "@/components/pricing/checkout-button"
+import { PLANS, formatPrice, type Currency } from "@/lib/plans"
 import { Check, X, Zap, Building, Sparkles } from "lucide-react"
 
-const plans = [
-  {
-    name: "Starter",
-    price: "Free",
-    description: "Perfect for individual developers and side projects.",
-    badge: "Current",
-    features: [
-      { text: "5 scans per month", included: true },
-      { text: "Basic vulnerability detection", included: true },
-      { text: "Standard reports", included: true },
-      { text: "Email support", included: true },
-      { text: "GitHub integration", included: true },
-      { text: "Team collaboration", included: false },
-      { text: "CI/CD integration", included: false },
-      { text: "Priority support", included: false },
-      { text: "Custom rules", included: false },
-    ],
-    cta: "Get Started",
-    href: "/scan",
-    highlighted: false,
-  },
-  {
-    name: "Pro",
-    price: "$29",
-    period: "/month",
-    description: "For teams and growing companies with security needs.",
-    badge: "Coming Soon",
-    features: [
-      { text: "Unlimited scans", included: true },
-      { text: "Advanced AI detection", included: true },
-       { text: "3x more accurate detection", included: true },
-      { text: "Detailed reports with fixes", included: true },
-      { text: "Priority email support", included: false },
-      { text: "GitHub, GitLab, Bitbucket", included: true },
-      { text: "Team collaboration (5 seats)", included: true },
-      { text: "CI/CD pipeline integration", included: true },
-      { text: "Priority support", included: true },
-      { text: "Custom rules", included: false },
-    ],
-    cta: "Join Waitlist",
-    href: "#",
-    highlighted: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    description: "For organizations requiring maximum security and compliance.",
-    badge: "Contact Us",
-    features: [
-      { text: "Everything in Pro", included: true },
-      { text: "Unlimited team seats", included: true },
-      { text: "Custom rule configuration", included: true },
-      { text: "On-premise deployment option", included: true },
-      { text: "Dedicated account manager", included: true },
-      { text: "SLA guarantee", included: true },
-      { text: "SSO/SAML integration", included: true },
-      { text: "Compliance reports", included: true },
-      { text: "24/7 phone support", included: true },
-    ],
-    cta: "Contact Sales",
-    href: "#",
-    highlighted: false,
-  },
+type Feature = { text: string; included: boolean; soon?: boolean }
+
+// Only list what really exists. Features still being built are marked "coming soon".
+const starterFeatures: Feature[] = [
+  { text: "1 free scan", included: true },
+  { text: "Basic vulnerability detection", included: true },
+  { text: "ZIP uploads and public repositories", included: true },
+  { text: "Standard reports", included: true },
+  { text: "Advanced AI scanner", included: false },
+  { text: "Priority support", included: false },
 ]
 
+const proFeatures: Feature[] = [
+  { text: "Unlimited scans", included: true },
+  { text: "Advanced AI scanner", included: true },
+  { text: "Detailed reports with fixes", included: true },
+  { text: "GitHub, GitLab and Bitbucket repositories", included: true },
+  { text: "Priority support", included: true },
+  { text: "Team collaboration", included: true, soon: true },
+  { text: "CI/CD integration", included: true, soon: true },
+]
+
+const enterpriseFeatures: Feature[] = [
+  { text: "Everything in Pro", included: true },
+  { text: "Custom needs and integrations (on request)", included: true },
+  { text: "Dedicated support", included: true },
+]
+
+function FeatureList({ features }: { features: Feature[] }) {
+  return (
+    <ul className="space-y-4 mb-8 flex-1">
+      {features.map((feature) => (
+        <li key={feature.text} className="flex items-start gap-3">
+          {feature.included ? (
+            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+              <Check className="h-3 w-3 text-primary" />
+            </div>
+          ) : (
+            <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
+              <X className="h-3 w-3 text-muted-foreground/50" />
+            </div>
+          )}
+          <span className={`text-sm ${feature.included ? "text-foreground" : "text-muted-foreground/60"}`}>
+            {feature.text}
+            {feature.soon && <span className="ml-2 text-xs text-muted-foreground">(coming soon)</span>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export default function PricingPage() {
+  const [currency, setCurrency] = useState<Currency>("USD")
+  const [period, setPeriod] = useState<"pro_monthly" | "pro_yearly">("pro_monthly")
+
+  // Default to rupees for visitors in India. They can switch at any time.
+  useEffect(() => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (tz === "Asia/Calcutta" || tz === "Asia/Kolkata") setCurrency("INR")
+    } catch {}
+  }, [])
+
+  const plan = PLANS[period]
+  const price = formatPrice(plan.prices[currency], currency)
+
+  const toggle = (active: boolean) =>
+    `px-3 py-1 text-xs rounded-md transition-colors ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`
+
   return (
     <>
       <BackgroundGrid />
       <Header />
       <main className="py-24 md:py-36">
         <div className="container px-4 md:px-6">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-20 max-w-3xl mx-auto"
-          >
-            <Badge
-              variant="outline"
-              className="px-4 py-1.5 border-primary/30 bg-primary/5 text-primary font-medium mb-6"
-            >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-20 max-w-3xl mx-auto">
+            <Badge variant="outline" className="px-4 py-1.5 border-primary/30 bg-primary/5 text-primary font-medium mb-6">
               <Sparkles className="w-3.5 h-3.5 mr-2" />
               Simple Pricing
             </Badge>
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
-              Start free, scale as you <span className="text-gradient">grow</span>
-            </h1>
-            <p className="text-xl text-muted-foreground">
-              Begin securing your code for free. Upgrade when you need more power.
-            </p>
+            <h1 className="text-4xl md:text-5xl mb-6">Start free, upgrade when you need more</h1>
+            <p className="text-xl text-muted-foreground">Try ProbCheck with one free scan. Go Pro for unlimited scans.</p>
           </motion.div>
 
-          {/* Pricing Cards */}
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {plans.map((plan, index) => (
-              <motion.div
-                key={plan.name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <div
-                  className={`glass-card rounded-2xl p-8 h-full flex flex-col relative ${
-                    plan.highlighted ? "glow-md ring-1 ring-primary/30" : ""
-                  }`}
-                >
-                  {plan.highlighted && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <Badge className="bg-primary text-primary-foreground shadow-lg">Most Popular</Badge>
-                    </div>
-                  )}
-
-                  <div className="mb-8">
-                    <div className="flex items-center gap-2 mb-4">
-                      {plan.name === "Starter" && <Zap className="h-5 w-5 text-primary" />}
-                      {plan.name === "Pro" && <Sparkles className="h-5 w-5 text-primary" />}
-                      {plan.name === "Enterprise" && <Building className="h-5 w-5 text-primary" />}
-                      <h2 className="text-xl font-bold">{plan.name}</h2>
-                    </div>
-                    <div className="flex items-baseline gap-1 mb-3">
-                      <span className="text-4xl font-bold text-gradient">{plan.price}</span>
-                      {plan.period && <span className="text-muted-foreground">{plan.period}</span>}
-                    </div>
-                    <p className="text-muted-foreground text-sm">{plan.description}</p>
-                    <Badge variant="outline" className="mt-4 bg-white/5 text-muted-foreground border-white/10">
-                      {plan.badge}
-                    </Badge>
+            {/* STARTER */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="glass-card rounded-2xl p-8 h-full flex flex-col">
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Zap className="h-5 w-5 text-primary" />
+                    <h2 className="text-xl font-bold">Starter</h2>
                   </div>
-
-                  <ul className="space-y-4 mb-8 flex-1">
-                    {plan.features.map((feature) => (
-                      <li key={feature.text} className="flex items-start gap-3">
-                        {feature.included ? (
-                          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                            <Check className="h-3 w-3 text-primary" />
-                          </div>
-                        ) : (
-                          <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-0.5">
-                            <X className="h-3 w-3 text-muted-foreground/50" />
-                          </div>
-                        )}
-                        <span
-                          className={`text-sm ${feature.included ? "text-foreground" : "text-muted-foreground/50"}`}
-                        >
-                          {feature.text}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link href={plan.href}>
-                    <Button
-                      className={`w-full h-11 ${
-                        plan.highlighted
-                          ? "bg-primary text-primary-foreground hover:bg-primary/90 glow-sm"
-                          : "bg-white/5 text-foreground hover:bg-white/10 border border-white/10"
-                      }`}
-                    >
-                      {plan.cta}
-                    </Button>
-                  </Link>
+                  <div className="text-4xl font-bold mb-3">Free</div>
+                  <p className="text-muted-foreground text-sm">For trying out ProbCheck on a project.</p>
                 </div>
-              </motion.div>
-            ))}
+                <FeatureList features={starterFeatures} />
+                <Link href="/scan">
+                  <Button variant="outline" className="w-full h-11">Get started</Button>
+                </Link>
+              </div>
+            </motion.div>
+
+            {/* PRO */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <div className="glass-card rounded-2xl p-8 h-full flex flex-col relative ring-1 ring-primary/30">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-primary text-primary-foreground shadow-lg">Most popular</Badge>
+                </div>
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    <h2 className="text-xl font-bold">Pro</h2>
+                  </div>
+                  <div className="flex items-baseline gap-1 mb-3">
+                    <span className="text-4xl font-bold">{price}</span>
+                    <span className="text-muted-foreground">{period === "pro_monthly" ? "/month" : "/year"}</span>
+                  </div>
+                  <p className="text-muted-foreground text-sm mb-4">One-time payment. It does not renew by itself.</p>
+
+                  <div className="flex flex-wrap gap-2">
+                    <div className="inline-flex rounded-lg border border-border p-0.5">
+                      <button className={toggle(period === "pro_monthly")} onClick={() => setPeriod("pro_monthly")}>Monthly</button>
+                      <button className={toggle(period === "pro_yearly")} onClick={() => setPeriod("pro_yearly")}>Yearly</button>
+                    </div>
+                    <div className="inline-flex rounded-lg border border-border p-0.5">
+                      <button className={toggle(currency === "INR")} onClick={() => setCurrency("INR")}>₹ INR</button>
+                      <button className={toggle(currency === "USD")} onClick={() => setCurrency("USD")}>$ USD</button>
+                    </div>
+                  </div>
+                </div>
+                <FeatureList features={proFeatures} />
+                <CheckoutButton planKey={period} currency={currency} label={`Get Pro for ${price}`} />
+              </div>
+            </motion.div>
+
+            {/* ENTERPRISE */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <div className="glass-card rounded-2xl p-8 h-full flex flex-col">
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Building className="h-5 w-5 text-primary" />
+                    <h2 className="text-xl font-bold">Enterprise</h2>
+                  </div>
+                  <div className="text-4xl font-bold mb-3">Custom</div>
+                  <p className="text-muted-foreground text-sm">For organizations with special requirements.</p>
+                </div>
+                <FeatureList features={enterpriseFeatures} />
+                <Link href="/contact">
+                  <Button variant="outline" className="w-full h-11">Contact us</Button>
+                </Link>
+              </div>
+            </motion.div>
           </div>
 
-          {/* SEO Content */}
-          <motion.section
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="mt-28 max-w-3xl mx-auto text-center"
-          >
-            <h2 className="text-2xl font-bold mb-5">More Affordable Than Traditional Bug Bounty Programs</h2>
-            <p className="text-muted-foreground leading-relaxed">
-              Bug bounty programs typically cost thousands of dollars per vulnerability discovered. ProbCheck provides
-              continuous, automated security scanning that catches common vulnerabilities before you need to pay bounty
-              hunters. Use ProbCheck to maintain baseline security, then deploy targeted bug bounties for edge-case
-              testing. It's the cost-effective, layered approach to application security.
-            </p>
-          </motion.section>
+          <p className="text-center text-xs text-muted-foreground mt-10 max-w-2xl mx-auto">
+            Payments are processed securely by Razorpay. ProbCheck never sees or stores your card details.
+          </p>
         </div>
       </main>
       <Footer />

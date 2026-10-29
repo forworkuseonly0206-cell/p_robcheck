@@ -1,25 +1,35 @@
+// app/api/reports/[id]/route.ts  (COMPLETE FILE - replace the old one)
+// BEFORE: anyone who knew a scan id could read that report.
+// NOW: you must be signed in, and the scan must be YOURS.
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { requireUser, HttpError } from "@/lib/auth-server"
+   
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireUser(request)
     const { id: scanId } = await params
 
-    if (!scanId) {
-      return NextResponse.json({ error: "Missing scan id" }, { status: 400 })
+    if (!UUID_RE.test(scanId)) {
+      throw new HttpError("Report not found", 404)
     }
 
-    const { data: scan, error: scanError } = await supabaseAdmin
+    // The "user_id = you" condition is what stops people reading each other's reports
+    const { data: scan } = await supabaseAdmin
       .from("scans")
       .select("*")
       .eq("id", scanId)
-      .single()
+      .eq("user_id", userId)
+      .maybeSingle()
 
-    if (scanError || !scan) {
-      return NextResponse.json({ error: "Scan not found" }, { status: 404 })
+    if (!scan) {
+      throw new HttpError("Report not found", 404)
     }
 
     const { data: vulnerabilities, error: vulnError } = await supabaseAdmin
@@ -32,15 +42,13 @@ export async function GET(
       console.error("Vulnerability fetch error:", vulnError)
     }
 
-    return NextResponse.json({
-      scan,
-      vulnerabilities: vulnerabilities || [],
-    })
-  } catch (error) {
-    console.error("Report API error:", error)
+    return NextResponse.json({ scan, vulnerabilities: vulnerabilities || [] })
+  } catch (error: any) {
+    const isHttp = error instanceof HttpError
+    if (!isHttp) console.error("Report API error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      { error: isHttp ? error.message : "Internal server error" },
+      { status: isHttp ? error.status : 500 }
     )
   }
 }

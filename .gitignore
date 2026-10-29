@@ -4,13 +4,22 @@ node_modules
 # next.js build output
 .next
 dist
+out
 
-# environment variables
+# environment variables: NEVER commit any of these
 .env
-.env.local
+.env.*
+!.env.example
 
 # temp folders
 .temp-repos
 
 # secrets / test keys
 test-api-key.js
+*.pem
+*.key
+
+# logs and OS files
+*.log
+.DS_Store
+.vercel

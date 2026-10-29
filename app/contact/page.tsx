@@ -31,10 +31,10 @@ export default function ContactPage() {
               Get help via email. We typically respond within 24 hours.
             </p>
             <a 
-              href="mailto:support@probcheck.in"
+              href="mailto:forworkuseonly0206@gmail.com"
               className="text-primary hover:underline text-sm font-medium"
             >
-              support@probcheck.in
+              forworkuseonly0206@gmail.com
             </a>
           </div>
           

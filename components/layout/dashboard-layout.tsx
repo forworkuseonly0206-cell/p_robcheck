@@ -1,3 +1,4 @@
+// componets/layout/dasboard-layout.tsx
 import type React from "react"
 import { memo } from "react"
 import { DashboardSidebar } from "./dashboard-sidebar"

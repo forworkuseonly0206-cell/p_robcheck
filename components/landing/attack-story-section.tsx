@@ -1,3 +1,4 @@
+// components/landing/attack-story-section.tsx
 "use client"
 
 import { motion, useInView } from "framer-motion"

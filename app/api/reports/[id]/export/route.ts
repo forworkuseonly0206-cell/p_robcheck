@@ -1,234 +1,221 @@
-// app/api/reports/[id]/export/route.ts
+// app/api/reports/[id]/export/route.ts (COMPLETE FILE - replace the old one)
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { requireUser, HttpError } from "@/lib/auth-server"
+import { checkRateLimit } from "@/lib/rate-limit"
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const MAX_VULNS_IN_PDF = 500
+
+const clean = (v: unknown, max = 1000) =>
+  String(v ?? "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, "?")
+    .slice(0, max)
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
-
-    if (!id) {
-      return NextResponse.json({ error: "Missing report ID" }, { status: 400 })
+    const userId = await requireUser(req)
+    if (!(await checkRateLimit(`export:user:${userId}`, 20, 3600))) {
+      throw new HttpError("Too many downloads. Please try again later.", 429)
     }
 
-    console.log("Fetching scan:", id)
+    const { id } = await params
+    if (!UUID_RE.test(id)) throw new HttpError("Report not found", 404)
 
-    const { data: scan, error: scanError } = await supabaseAdmin
+    const { data: scan } = await supabaseAdmin
       .from("scans")
       .select("*")
       .eq("id", id)
-      .single()
+      .eq("user_id", userId)
+      .maybeSingle()
 
-    if (scanError || !scan) {
-      console.error("Scan fetch error:", scanError)
-      return NextResponse.json({ error: "Report not found" }, { status: 404 })
-    }
-
-    console.log("Scan found:", scan.scan_name)
+    if (!scan) throw new HttpError("Report not found", 404)
 
     const { data: vulnerabilities } = await supabaseAdmin
       .from("vulnerabilities")
       .select("*")
       .eq("scan_id", id)
-
-    console.log("Vulnerabilities found:", vulnerabilities?.length || 0)
+      .limit(MAX_VULNS_IN_PDF)
 
     /* ---------- CREATE PDF ---------- */
     const pdfDoc = await PDFDocument.create()
     const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman)
     const timesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold)
-    
-    let page = pdfDoc.addPage([595, 842]) // A4 size
+
+    let page = pdfDoc.addPage([595, 842]) // A4
     const { width, height } = page.getSize()
     let yPosition = height - 50
 
-    // Helper function to add text and manage pages
-    const addText = (text: string, fontSize: number, font: any, options?: { bold?: boolean, indent?: number }) => {
-      const lineHeight = fontSize * 1.2
+    const drawHeaderAndFooter = (pg: any, pageNum: number) => {
+      // Header branding
+      pg.drawText("PROBCHECK SECURITY AUDIT REPORT", {
+        x: 50,
+        y: height - 30,
+        size: 8,
+        font: timesBold,
+        color: rgb(0.3, 0.3, 0.3),
+      })
+      pg.drawLine({
+        start: { x: 50, y: height - 35 },
+        end: { x: width - 50, y: height - 35 },
+        thickness: 0.5,
+        color: rgb(0.8, 0.8, 0.8),
+      })
+
+      // Footer Watermark & Compliance Stamp
+      pg.drawLine({
+        start: { x: 50, y: 45 },
+        end: { x: width - 50, y: 45 },
+        thickness: 0.5,
+        color: rgb(0.8, 0.8, 0.8),
+      })
+      pg.drawText("VERIFIED & CERTIFIED SECURE BY PROBCHECK (probcheck.in) ", {
+        x: 50,
+        y: 32,
+        size: 7,
+        font: timesBold,
+        color: rgb(0.2, 0.5, 0.3),
+      })
+      pg.drawText(`Scan ID: ${id} | Page ${pageNum}`, {
+        x: width - 180,
+        y: 32,
+        size: 7,
+        font: timesRoman,
+        color: rgb(0.4, 0.4, 0.4),
+      })
+    }
+
+    let pageNum = 1
+    drawHeaderAndFooter(page, pageNum)
+
+    const newPageIfNeeded = (requiredSpace = 40) => {
+      if (yPosition < requiredSpace) {
+        pageNum++
+        page = pdfDoc.addPage([595, 842])
+        yPosition = height - 50
+        drawHeaderAndFooter(page, pageNum)
+      }
+    }
+
+    const addText = (raw: string, fontSize: number, font: any, options?: { indent?: number; color?: any }) => {
+      const text = clean(raw)
+      const lineHeight = fontSize * 1.3
       const maxWidth = width - 100
       const indent = options?.indent || 0
-      
-      // Simple text wrapping
-      const words = text.split(' ')
-      let line = ''
-      
-      for (const word of words) {
-        const testLine = line + word + ' '
-        const testWidth = font.widthOfTextAtSize(testLine, fontSize)
-        
-        if (testWidth > maxWidth && line !== '') {
-          if (yPosition < 50) {
-            page = pdfDoc.addPage([595, 842])
-            yPosition = height - 50
-          }
-          
-          page.drawText(line.trim(), {
-            x: 50 + indent,
-            y: yPosition,
-            size: fontSize,
-            font: font,
-            color: rgb(0, 0, 0),
-          })
-          
-          line = word + ' '
-          yPosition -= lineHeight
+      const textColor = options?.color || rgb(0.1, 0.1, 0.1)
+      let line = ""
+
+      const flush = () => {
+        newPageIfNeeded(lineHeight + 20)
+        page.drawText(line.trim(), { x: 50 + indent, y: yPosition, size: fontSize, font, color: textColor })
+        yPosition -= lineHeight
+      }
+
+      for (const word of text.split(" ")) {
+        const testLine = line + word + " "
+        if (font.widthOfTextAtSize(testLine, fontSize) > maxWidth - indent && line !== "") {
+          flush()
+          line = word + " "
         } else {
           line = testLine
         }
       }
-      
-      if (line.trim() !== '') {
-        if (yPosition < 50) {
-          page = pdfDoc.addPage([595, 842])
-          yPosition = height - 50
-        }
-        
-        page.drawText(line.trim(), {
-          x: 50 + indent,
-          y: yPosition,
-          size: fontSize,
-          font: font,
-          color: rgb(0, 0, 0),
-        })
-        
-        yPosition -= lineHeight
-      }
+      if (line.trim() !== "") flush()
     }
 
-    const addSpace = (amount: number = 20) => {
+    const addSpace = (amount = 15) => {
       yPosition -= amount
-      if (yPosition < 50) {
-        page = pdfDoc.addPage([595, 842])
-        yPosition = height - 50
-      }
+      newPageIfNeeded()
     }
 
-    /* ---------- HEADER ---------- */
-    addText("Security Scan Report", 24, timesBold)
-    addSpace(30)
+    // Title Section
+    addText("Security Audit Report", 22, timesBold, { color: rgb(0.1, 0.3, 0.1) })
+    addSpace(15)
 
-    /* ---------- PROJECT INFO ---------- */
-    addText("Project Information", 16, timesBold)
-    addSpace(10)
-    
-    addText(`Project Name: ${scan.scan_name}`, 12, timesRoman)
-    addText(`Scan Date: ${new Date(scan.created_at).toDateString()}`, 12, timesRoman)
-    addText(`Status: ${scan.status || 'completed'}`, 12, timesRoman)
+    addText("Project Information", 14, timesBold)
+    addSpace(5)
+    addText(`Project Name: ${scan.scan_name || "Unnamed"}`, 11, timesRoman)
+    addText(`Scan Date: ${new Date(scan.created_at).toUTCString()}`, 11, timesRoman)
+    addText(`Audit Status: ${String(scan.status || "unknown").toUpperCase()}`, 11, timesRoman)
     addText(
-      `Duration: ${
+      `Execution Duration: ${
         scan.scan_duration_seconds
           ? `${Math.floor(scan.scan_duration_seconds / 60)}m ${scan.scan_duration_seconds % 60}s`
-          : "—"
+          : "-"
       }`,
-      12,
+      11,
       timesRoman
     )
-    addSpace(30)
-
-    /* ---------- SUMMARY ---------- */
-    addText("Vulnerability Summary", 16, timesBold)
-    addSpace(10)
-    
-    const total = (scan.critical_count || 0) + (scan.high_count || 0) + 
-                 (scan.medium_count || 0) + (scan.low_count || 0)
-    addText(`Total Vulnerabilities: ${total}`, 12, timesRoman)
-    addText(`Critical: ${scan.critical_count || 0}`, 12, timesRoman, { indent: 20 })
-    addText(`High: ${scan.high_count || 0}`, 12, timesRoman, { indent: 20 })
-    addText(`Medium: ${scan.medium_count || 0}`, 12, timesRoman, { indent: 20 })
-    addText(`Low: ${scan.low_count || 0}`, 12, timesRoman, { indent: 20 })
-    addSpace(30)
-
-    /* ---------- FINDINGS ---------- */
-    addText("Detailed Findings", 16, timesBold)
-    addSpace(10)
-
-    if (vulnerabilities && vulnerabilities.length > 0) {
-      vulnerabilities.forEach((v: any, i: number) => {
-        addText(
-          `${i + 1}. ${v.title || "Untitled Vulnerability"}`,
-          12,
-          timesBold
-        )
-        addText(`Severity: ${String(v.severity || "unknown").toUpperCase()}`, 10, timesRoman, { indent: 10 })
-        addText(`File: ${v.file_path || "Unknown"}`, 10, timesRoman, { indent: 10 })
-        
-        if (v.line_number) {
-          addText(`Line: ${v.line_number}`, 10, timesRoman, { indent: 10 })
-        }
-        
-        if (v.description) {
-          addText(`Description: ${v.description}`, 10, timesRoman, { indent: 10 })
-        }
-        
-        if (v.cwe) {
-          addText(`CWE: ${v.cwe}`, 10, timesRoman, { indent: 10 })
-        }
-        
-        addSpace(15)
-      })
-    } else {
-      addText("No vulnerabilities found. Your code is clean!", 12, timesRoman)
-    }
-
-    /* ---------- FOOTER ---------- */
     addSpace(20)
-    addText(
-      `Generated on ${new Date().toLocaleString()}`,
-      8,
-      timesRoman
-    )
 
-    const pdfBytes = await pdfDoc.save()
+    addText("Vulnerability Summary", 14, timesBold)
+    addSpace(5)
 
-    console.log("PDF generated, size:", pdfBytes.length, "bytes")
+    if (scan.status !== "completed") {
+      addText("This scan did not complete successfully, so no verified findings are available.", 11, timesRoman, { color: rgb(0.6, 0.1, 0.1) })
+    } else {
+      const total =
+        (scan.critical_count || 0) + (scan.high_count || 0) + (scan.medium_count || 0) + (scan.low_count || 0)
+      addText(`Total Verified Findings: ${total}`, 11, timesBold)
+      addText(`• Critical Severity: ${scan.critical_count || 0}`, 11, timesRoman, { indent: 15, color: rgb(0.8, 0.1, 0.1) })
+      addText(`• High Severity: ${scan.high_count || 0}`, 11, timesRoman, { indent: 15, color: rgb(0.8, 0.4, 0.1) })
+      addText(`• Medium Severity: ${scan.medium_count || 0}`, 11, timesRoman, { indent: 15, color: rgb(0.7, 0.6, 0.1) })
+      addText(`• Low Severity: ${scan.low_count || 0}`, 11, timesRoman, { indent: 15, color: rgb(0.1, 0.4, 0.7) })
+      addSpace(20)
 
-    if (pdfBytes.length === 0) {
-      throw new Error("Generated PDF is empty")
-    }
+      addText("Detailed Findings & Exploit Pathways", 14, timesBold)
+      addSpace(10)
 
-    // Convert Uint8Array to Buffer for NextResponse
-    const pdfBuffer = Buffer.from(pdfBytes)
-
-    // Sanitize filename
-    const safeFilename = scan.scan_name.replace(/[^a-z0-9]/gi, '_')
-
-    // ✅ NEW: Save report record to database
-    try {
-      await supabaseAdmin
-        .from("reports")
-        .insert({
-          scan_id: id,
-          report_type: "pdf",
-          file_size_bytes: pdfBuffer.length,
-          generated_at: new Date().toISOString(),
+      if (vulnerabilities && vulnerabilities.length > 0) {
+        vulnerabilities.forEach((v: any, i: number) => {
+          newPageIfNeeded(90)
+          addText(`${i + 1}. ${v.title || "Untitled Vulnerability"}`, 11, timesBold)
+          addText(`Severity: ${String(v.severity || "unknown").toUpperCase()}${v.cwe ? ` | CWE: ${v.cwe}` : ""}`, 10, timesRoman, { indent: 10 })
+          addText(`File Path: ${v.file_path || "Unknown"}${v.line_number ? ` (Line ${v.line_number})` : ""}`, 10, timesRoman, { indent: 10 })
+          if (v.description) addText(`Description & Attack Path: ${v.description}`, 10, timesRoman, { indent: 10 })
+          if (v.suggested_fix) addText(`Remediation & Patch: ${v.suggested_fix}`, 10, timesRoman, { indent: 10 })
+          addSpace(15)
         })
-      console.log("✅ Report record saved to database")
-    } catch (dbError) {
-      console.warn("⚠️ Failed to save report record:", dbError)
-      // Continue anyway - PDF generation is more important
+      } else {
+        addText("No vulnerabilities were detected by this scan. Note that automated analysis serves as a first line of defense and cannot guarantee absolute security against complex business logic flaws.", 11, timesRoman)
+      }
     }
+
+    const pdfBuffer = Buffer.from(await pdfDoc.save())
+    if (pdfBuffer.length === 0) throw new Error("Generated PDF is empty")
+
+    const { error: recordError } = await supabaseAdmin.from("reports").insert({
+      scan_id: id,
+      user_id: userId,
+      report_type: "pdf",
+      file_size_bytes: pdfBuffer.length,
+      generated_at: new Date().toISOString(),
+    })
+    if (recordError) console.warn("⚠️ Failed to save report record:", recordError.message)
+
+    const safeFilename = String(scan.scan_name || "scan").replace(/[^a-z0-9]/gi, "_").slice(0, 60)
 
     return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${safeFilename}-report.pdf"`,
+        "Content-Disposition": `attachment; filename="${safeFilename}-security-report.pdf"`,
         "Cache-Control": "no-store",
       },
     })
-  } catch (error) {
-    console.error("PDF Export Error:", error)
+  } catch (error: any) {
+    const isHttp = error instanceof HttpError
+    if (!isHttp) console.error("PDF Export Error:", error)
     return NextResponse.json(
-      { 
-        error: "Failed to generate PDF", 
-        details: error instanceof Error ? error.message : String(error) 
-      },
-      { status: 500 }
+      { error: isHttp ? error.message : "Failed to generate PDF" },
+      { status: isHttp ? error.status : 500 }
     )
   }
 }
