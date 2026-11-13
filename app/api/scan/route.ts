@@ -19,13 +19,12 @@ import { updateUsageStats } from "@/lib/usage-stats"
 import { logAudit } from "@/lib/audit-log"
 
 export const runtime = "nodejs"
-export const maxDuration = 60 // Prevents serverless timeout on multi-file ZIP scans
+export const maxDuration = 60
 
-// ---- Safety limits (protect your server from huge or booby-trapped uploads) ----
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024   // the ZIP itself: 25 MB
-const MAX_ENTRIES = 5000                    // files inside the ZIP
-const MAX_ENTRY_BYTES = 1 * 1024 * 1024     // one file once unpacked: 1 MB
-const MAX_TOTAL_BYTES = 50 * 1024 * 1024    // everything unpacked: 50 MB
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024   // 25 MB
+const MAX_ENTRIES = 5000                    // max files inside ZIP
+const MAX_ENTRY_BYTES = 1 * 1024 * 1024     // 1 MB per unpacked file
+const MAX_TOTAL_BYTES = 50 * 1024 * 1024    // 50 MB total unpacked
 const MAX_FILES_TO_SCAN = 30
 
 const GENERIC_SERVER_ERROR = "The scan failed because of a server error. Please try again."
@@ -42,8 +41,8 @@ const SKIP_FILES = [
 ]
 
 const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
-  javascript: [".js", ".jsx", ".mjs", ".cjs"],
-  typescript: [".ts", ".tsx"],
+  javascript: [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"],
+  typescript: [".ts", ".tsx", ".js", ".jsx"],
   python: [".py"],
   go: [".go"],
   java: [".java"],
@@ -54,16 +53,15 @@ const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
   cpp: [".cpp", ".cc", ".cxx", ".c", ".h", ".hpp"],
 }
 
-function getAllowedExtensions(language: string): string[] {
-  const all = Object.values(LANGUAGE_EXTENSIONS).flat()
-  if (!language || language === "all") return all
+const ALL_CODE_EXTENSIONS = Array.from(new Set(Object.values(LANGUAGE_EXTENSIONS).flat()))
 
+function getAllowedExtensions(language: string): string[] {
+  if (!language || language === "all") return ALL_CODE_EXTENSIONS
   const picked = language.split(",").map(l => l.trim().toLowerCase()).filter(Boolean)
   const exts = picked.flatMap(l => LANGUAGE_EXTENSIONS[l] || [])
-  return exts.length ? exts : all
+  return exts.length ? Array.from(new Set(exts)) : ALL_CODE_EXTENSIONS
 }
 
-// Prioritize real production files over test/mock files when capping at 30 files
 function isTestFile(filePath: string): boolean {
   const lower = filePath.toLowerCase()
   return (
@@ -73,6 +71,39 @@ function isTestFile(filePath: string): boolean {
     lower.includes(".test.") ||
     lower.includes(".spec.")
   )
+}
+
+function extractMatchingFiles(sortedEntries: any[], allowedExtensions: string[]) {
+  const files: { path: string; content: string }[] = []
+  let totalBytes = 0
+  let matchedCount = 0
+
+  for (const entry of sortedEntries) {
+    if (entry.isDirectory) continue
+    const path = entry.entryName.toLowerCase()
+
+    if (SKIP_DIRS.some(d => path.includes(`/${d}/`) || path.startsWith(`${d}/`))) continue
+    if (SKIP_FILES.some(ext => path.endsWith(ext))) continue
+    if (!allowedExtensions.some(ext => path.endsWith(ext))) continue
+
+    matchedCount++
+    if (files.length >= MAX_FILES_TO_SCAN) continue
+
+    if (entry.header.size > MAX_ENTRY_BYTES) continue
+    const content = entry.getData().toString("utf8")
+    if (content.length > MAX_ENTRY_BYTES) continue
+
+    totalBytes += content.length
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      throw new HttpError("The unpacked code is too large to scan.", 413)
+    }
+
+    if (content.trim().length < 20) continue
+
+    files.push({ path: entry.entryName.slice(0, 300), content })
+  }
+
+  return { files, matchedCount }
 }
 
 export async function POST(req: Request) {
@@ -88,8 +119,8 @@ export async function POST(req: Request) {
     userId = await requireUser(req)
 
     const ip = getClientIp(req)
-    const okUser = await checkRateLimit(`scan:user:${userId}`, 10, 3600)
-    const okIp = await checkRateLimit(`scan:ip:${ip}`, 30, 3600)
+    const okUser = await checkRateLimit(`scan:user:${userId}`, 25, 3600)
+    const okIp = await checkRateLimit(`scan:ip:${ip}`, 60, 3600)
     if (!okUser || !okIp) {
       throw new HttpError("Too many scan requests. Please wait a while and try again.", 429)
     }
@@ -106,7 +137,7 @@ export async function POST(req: Request) {
         .replace(/[\u0000-\u001f<>]/g, "")
         .trim()
         .slice(0, 100) || "unnamed-project"
-    const language = String(form.get("language") || "javascript").slice(0, 100)
+    const language = String(form.get("language") || "all").slice(0, 100)
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
@@ -125,17 +156,9 @@ export async function POST(req: Request) {
     const planType = (profile.plan_type || "free").toLowerCase()
     const isPro = planType === "pro" || planType === "enterprise"
 
-    console.log(`🔍 User ${userId} | plan: ${planType} | scanner: ${isPro ? "ADVANCED" : "BASIC"}`)
-
-    if (!file) {
-      throw new HttpError("No file provided", 400)
-    }
-    if (!file.name.toLowerCase().endsWith(".zip")) {
-      throw new HttpError("Please upload a .zip file", 400)
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      throw new HttpError("File is too large (maximum 25 MB).", 413)
-    }
+    if (!file) throw new HttpError("No file provided", 400)
+    if (!file.name.toLowerCase().endsWith(".zip")) throw new HttpError("Please upload a .zip file", 400)
+    if (file.size > MAX_UPLOAD_BYTES) throw new HttpError("File is too large (maximum 25 MB).", 413)
 
     const allowed = await consumeScanSlot(userId)
     if (!allowed) {
@@ -156,7 +179,6 @@ export async function POST(req: Request) {
     })
 
     scanId = scan.id
-
     await updateScanStatus(scanId, "scanning", 0)
 
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -167,41 +189,18 @@ export async function POST(req: Request) {
       throw new HttpError("This ZIP contains too many files (maximum 5,000).", 400)
     }
 
-    // Sort entries so non-test files are unpacked first
     const sortedEntries = [...entries].sort((a, b) => {
       const aTest = isTestFile(a.entryName) ? 1 : 0
       const bTest = isTestFile(b.entryName) ? 1 : 0
       return aTest - bTest || a.entryName.localeCompare(b.entryName)
     })
 
-    const allowedExtensions = getAllowedExtensions(language)
-    const files: { path: string; content: string }[] = []
-    let totalBytes = 0
-    let matchedCount = 0
-
-    for (const entry of sortedEntries) {
-      if (entry.isDirectory) continue
-      const path = entry.entryName.toLowerCase()
-
-      if (SKIP_DIRS.some(d => path.includes(`/${d}/`) || path.startsWith(`${d}/`))) continue
-      if (SKIP_FILES.some(ext => path.endsWith(ext))) continue
-      if (!allowedExtensions.some(ext => path.endsWith(ext))) continue
-
-      matchedCount++
-      if (files.length >= MAX_FILES_TO_SCAN) continue
-
-      if (entry.header.size > MAX_ENTRY_BYTES) continue
-      const content = entry.getData().toString("utf8")
-      if (content.length > MAX_ENTRY_BYTES) continue
-
-      totalBytes += content.length
-      if (totalBytes > MAX_TOTAL_BYTES) {
-        throw new HttpError("The unpacked code is too large to scan.", 413)
-      }
-
-      if (content.trim().length < 20) continue
-
-      files.push({ path: entry.entryName.slice(0, 300), content })
+    // Scan all supported languages in the ZIP so multi-language projects never skip files
+    let { files, matchedCount } = extractMatchingFiles(sortedEntries, ALL_CODE_EXTENSIONS)
+    if (files.length === 0) {
+      const fallback = extractMatchingFiles(sortedEntries, getAllowedExtensions(language))
+      files = fallback.files
+      matchedCount = fallback.matchedCount
     }
 
     const safeFiles = files.slice(0, MAX_FILES_TO_SCAN)
@@ -211,7 +210,7 @@ export async function POST(req: Request) {
         : []
 
     if (safeFiles.length === 0) {
-      throw new HttpError("No scannable files were found in this ZIP for the selected language.", 400)
+      throw new HttpError("No scannable code files were found in this ZIP.", 400)
     }
 
     console.log(`📊 Scanning ${safeFiles.length} files with ${isPro ? "🚀 ADVANCED (Pro)" : "⚡ BASIC (Free)"} tier`)
@@ -220,34 +219,15 @@ export async function POST(req: Request) {
       ? await advancedAnalyzeFiles(safeFiles, {
           projectName,
           language,
-          userId: userId,
-          scanId: scanId,
+          userId,
+          scanId,
         })
       : await analyzeFiles(safeFiles, { projectName, language })
 
     if (report.error) {
       console.error(`❌ Scan failed with error: ${report.error}`)
-
       await failScan(scanId, GENERIC_SCANNER_ERROR)
       await refundScanSlot(userId)
-
-      const shouldSendEmail = await shouldSendScanEmail(userId)
-      if (shouldSendEmail && userEmail) {
-        try {
-          await sendScanCompleteEmail({
-            userEmail,
-            userName: userName || undefined,
-            scanId: scanId,
-            projectName,
-            summary: { critical: 0, high: 0, medium: 0, low: 0 },
-            filesScanned: 0,
-            error: GENERIC_SCANNER_ERROR,
-            selectedLanguage: language,
-          })
-        } catch (emailError) {
-          console.error("⚠️ Failed to send error email:", emailError)
-        }
-      }
 
       return NextResponse.json(
         { error: GENERIC_SCANNER_ERROR, scanId, selectedLanguage: language },
@@ -268,13 +248,12 @@ export async function POST(req: Request) {
     scanCompleted = true
 
     const shouldSendEmail = await shouldSendScanEmail(userId)
-
     if (shouldSendEmail && userEmail) {
       try {
         await sendScanCompleteEmail({
           userEmail,
           userName: userName || undefined,
-          scanId: scanId,
+          scanId,
           projectName,
           summary: report.summary,
           filesScanned: safeFiles.length,
@@ -298,7 +277,7 @@ export async function POST(req: Request) {
 
     try {
       await logAudit({
-        userId: userId,
+        userId,
         action: "scan_completed",
         resourceType: "scan",
         resourceId: scanId,
