@@ -1,6 +1,4 @@
-// lib/precise-scanner.ts (COMPLETE FILE)
-// Connects your scan routes to the 4-Gate Deterministic Bug Bounty Engine,
-// while preserving multi-language file filtering and AI cost tracking.
+// lib/precise-scanner.ts (COMPLETE FILE - replace the entire file with this)
 import { callGeminiJSON, callClaudeJSON, trackAICost } from '@/lib/openai'
 import { scanFiles, type FileInput } from '@/lib/analysis-engine'
 
@@ -13,8 +11,8 @@ export type ScanOptions = {
 
 const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
   'javascript / typescript': ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
-  javascript: ['.js', '.jsx', '.mjs', '.cjs'],
-  typescript: ['.ts', '.tsx'],
+  javascript: ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'],
+  typescript: ['.ts', '.tsx', '.js', '.jsx'],
   python: ['.py', '.pyw', '.pyx'],
   go: ['.go'],
   java: ['.java', '.jsp'],
@@ -24,50 +22,33 @@ const LANGUAGE_EXTENSIONS: Record<string, string[]> = {
   csharp: ['.cs', '.cshtml', '.razor'],
   rust: ['.rs'],
   cpp: ['.cpp', '.cc', '.cxx', '.c', '.h', '.hpp'],
-  c: ['.c', '.h'],
+  c: ['.c', '.h', '.cpp', '.hpp'],
 }
+
+const ALL_SUPPORTED_EXTENSIONS = Array.from(
+  new Set(Object.values(LANGUAGE_EXTENSIONS).flat())
+)
 
 function filterByLanguage(files: FileInput[], language?: string): {
   matched: FileInput[]
   skippedWarning?: string
   error?: string
 } {
-  if (!language || language.trim().toLowerCase() === 'all') {
-    return { matched: files }
-  }
+  // Always keep all supported code files so multi-language repositories (TS, Python, Go, Java, PHP, C++)
+  // never silently drop files when a user leaves the dropdown on the default language.
+  const allSupported = files.filter(f => {
+    const lower = f.path.toLowerCase()
+    return ALL_SUPPORTED_EXTENSIONS.some(ext => lower.endsWith(ext))
+  })
 
-  const selected = language.split(',').map(l => l.trim().toLowerCase()).filter(Boolean)
-  const allowedExts = selected.flatMap(l => LANGUAGE_EXTENSIONS[l] || [])
-
-  if (allowedExts.length === 0) {
-    return { matched: files }
-  }
-
-  const matched: FileInput[] = []
-  const unmatched: FileInput[] = []
-
-  for (const file of files) {
-    const lower = file.path.toLowerCase()
-    if (allowedExts.some(ext => lower.endsWith(ext))) {
-      matched.push(file)
-    } else {
-      unmatched.push(file)
-    }
-  }
-
-  if (matched.length === 0) {
+  if (allSupported.length === 0) {
     return {
       matched: [],
-      error: `No ${selected.join(', ')} files were found in the project.`,
+      error: `No supported source code files were found in the project (${language || 'all'}).`,
     }
   }
 
-  const skippedWarning =
-    unmatched.length > 0
-      ? `${unmatched.length} file(s) skipped because they did not match the selected language (${selected.join(', ')}).`
-      : undefined
-
-  return { matched, skippedWarning }
+  return { matched: allSupported }
 }
 
 export async function analyzeFiles(files: FileInput[], options: ScanOptions = {}) {
@@ -78,18 +59,21 @@ export async function analyzeFiles(files: FileInput[], options: ScanOptions = {}
       summary: { critical: 0, high: 0, medium: 0, low: 0 },
       totalEstimatedBountyUsd: 0,
       results: [],
-      warnings: [],
+      warnings: [] as string[],
       error,
     }
   }
 
   const report = await scanFiles(matched, { callModel: callGeminiJSON })
+  const mergedWarnings: string[] = [...(report.warnings || [])]
   if (skippedWarning) {
-    report.warnings = [...(report.warnings || []), skippedWarning]
+    mergedWarnings.push(skippedWarning)
   }
+
   return {
     project: options.projectName || 'project',
     ...report,
+    warnings: mergedWarnings,
   }
 }
 
@@ -101,7 +85,7 @@ export async function advancedAnalyzeFiles(files: FileInput[], options: ScanOpti
       summary: { critical: 0, high: 0, medium: 0, low: 0 },
       totalEstimatedBountyUsd: 0,
       results: [],
-      warnings: [],
+      warnings: [] as string[],
       error,
     }
   }
@@ -117,8 +101,9 @@ export async function advancedAnalyzeFiles(files: FileInput[], options: ScanOpti
   }
 
   const report = await scanFiles(matched, { callModel: trackedClaudeCall })
+  const mergedWarnings: string[] = [...(report.warnings || [])]
   if (skippedWarning) {
-    report.warnings = [...(report.warnings || []), skippedWarning]
+    mergedWarnings.push(skippedWarning)
   }
 
   if (options.userId && options.scanId) {
@@ -138,5 +123,6 @@ export async function advancedAnalyzeFiles(files: FileInput[], options: ScanOpti
   return {
     project: options.projectName || 'project',
     ...report,
+    warnings: mergedWarnings,
   }
 }
